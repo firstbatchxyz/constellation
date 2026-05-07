@@ -20,6 +20,7 @@ from constellation.config import artifact_path
 from constellation.eval import run_eval_from_config
 from constellation.filtering import passes_basic_filters
 from constellation.io import iter_jsonl, write_jsonl
+from constellation.model_labeling import DEFAULT_ZERO_SHOT_MODEL, model_label_jsonl
 from constellation.parsers import parse_agenttrove_row, parse_hermes_row
 from constellation.schema import CanonicalSample
 from constellation.scoring import with_quality_score
@@ -158,6 +159,26 @@ def relabel_capabilities(args: argparse.Namespace) -> int:
     return 0
 
 
+def model_label(args: argparse.Namespace) -> int:
+    summary = model_label_jsonl(
+        input_path=artifact_path(args.input),
+        output_path=artifact_path(args.output),
+        taxonomy_path=args.taxonomy,
+        domain_taxonomy_path=args.domain_taxonomy,
+        model_name=args.model,
+        capability_threshold=args.capability_threshold,
+        domain_threshold=args.domain_threshold,
+        max_capabilities=args.max_capabilities,
+        max_domains=args.max_domains,
+        max_chars=args.max_chars,
+        batch_size=args.batch_size,
+        device=args.device,
+        limit=args.limit,
+    )
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
 def export_classifier(args: argparse.Namespace) -> int:
     summary = export_classifier_jsonl(
         input_path=artifact_path(args.input),
@@ -291,6 +312,25 @@ def build_parser() -> argparse.ArgumentParser:
     relabel_cmd.add_argument("--min-score", type=float, default=0.65)
     relabel_cmd.add_argument("--max-chars", type=int, default=24000)
     relabel_cmd.set_defaults(func=relabel_capabilities)
+
+    model_label_cmd = subcommands.add_parser(
+        "model-label",
+        help="label canonical JSONL with a lightweight zero-shot classifier model",
+    )
+    model_label_cmd.add_argument("--input", type=Path, required=True)
+    model_label_cmd.add_argument("--output", type=Path, required=True)
+    model_label_cmd.add_argument("--taxonomy", type=Path, default=DEFAULT_CAPABILITY_TAXONOMY)
+    model_label_cmd.add_argument("--domain-taxonomy", type=Path, default=DEFAULT_DOMAIN_TAXONOMY)
+    model_label_cmd.add_argument("--model", default=DEFAULT_ZERO_SHOT_MODEL)
+    model_label_cmd.add_argument("--capability-threshold", type=float, default=0.65)
+    model_label_cmd.add_argument("--domain-threshold", type=float, default=0.65)
+    model_label_cmd.add_argument("--max-capabilities", type=int, default=4)
+    model_label_cmd.add_argument("--max-domains", type=int, default=2)
+    model_label_cmd.add_argument("--max-chars", type=int, default=12000)
+    model_label_cmd.add_argument("--batch-size", type=int, default=16)
+    model_label_cmd.add_argument("--device", type=int)
+    model_label_cmd.add_argument("--limit", type=int)
+    model_label_cmd.set_defaults(func=model_label)
 
     export_cmd = subcommands.add_parser(
         "export-classifier-data",

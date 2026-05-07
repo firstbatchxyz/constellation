@@ -65,8 +65,8 @@ specialists in [configs/specialist_targets.json](configs/specialist_targets.json
 ModernBERT can still be useful as an encoder scorer, but not as a decoder-style
 prompt model that emits labels.
 
-Weak relabeling is conservative candidate labeling. Prompt exports do not use
-weak labels as ICL examples by default.
+For the main dataset build, use `model-label` with a lightweight zero-shot
+classifier. Weak relabeling is only a fallback/audit path.
 
 ## Core Training Rule
 

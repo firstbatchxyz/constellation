@@ -33,17 +33,36 @@ The first pass is weak supervision, not the final classifier. It combines:
 - label evidence stored in metadata
 
 The weak pass is intentionally conservative. It is meant to produce candidate
-labels and evidence, not trusted gold labels. Do not use weak-label outputs as
-ICL examples unless you explicitly pass `--allow-weak-examples` for debugging.
+labels and evidence, not trusted gold labels. For the main dataset build, prefer
+the lightweight model labeler below.
 
 ## Commands
 
 Relabel a canonical shard:
 
 ```bash
-uv run python -m constellation.cli relabel-capabilities \
+uv run python -m constellation.cli model-label \
   --input ~/constellation-runs/canonical/agenttrove.debugging_probe.jsonl \
   --output '{runs_dir}/labeled/agenttrove.debugging_probe.labeled.jsonl'
+```
+
+The default model is `cross-encoder/nli-MiniLM2-L6-H768`, a small Apache-2.0
+zero-shot NLI classifier. It scores capability and domain descriptions directly,
+so no deterministic keyword labels are needed for the main path.
+
+Install GPU labeling dependencies with:
+
+```bash
+uv pip install -r requirements/labeling.txt
+```
+
+Use the deterministic weak relabeler only for quick audits, fallback operation,
+or to inspect cue/evidence quality:
+
+```bash
+uv run python -m constellation.cli relabel-capabilities \
+  --input ~/constellation-runs/canonical/agenttrove.debugging_probe.jsonl \
+  --output '{runs_dir}/labeled/agenttrove.debugging_probe.weak.jsonl'
 ```
 
 Export prompt/ICL labeling jobs:
