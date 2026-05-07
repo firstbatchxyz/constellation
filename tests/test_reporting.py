@@ -37,6 +37,14 @@ class ReportingTests(unittest.TestCase):
             self.assertEqual(report["sample_types"], {"unknown": 2})
             self.assertEqual(report["capabilities"]["DEBUGGING"], 1)
             self.assertEqual(report["domains"]["CODING_SOFTWARE"], 1)
+            self.assertEqual(
+                report["breakdowns"]["capabilities_by_source"]["unknown"]["DEBUGGING"],
+                1,
+            )
+            self.assertEqual(
+                report["breakdowns"]["domains_by_sample_type"]["unknown"]["CODING_SOFTWARE"],
+                1,
+            )
             self.assertEqual(report["examples"]["capabilities"]["DEBUGGING"], ["a"])
             self.assertEqual(written, json.loads(output_path.read_text(encoding="utf-8")))
 
