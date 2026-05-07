@@ -89,31 +89,42 @@ its OpenAI-compatible API. In one GPU terminal:
 uv pip install -r requirements/serve.txt
 ```
 
-If SGLang fails while importing `deep_gemm`, prefer using DeepGEMM correctly by
-pointing `CUDA_HOME` at the CUDA toolkit root:
+For maximum SGLang throughput on H100, use DeepGEMM. DeepGEMM needs a visible
+CUDA toolkit, not just the NVIDIA driver/runtime. Confirm the machine has
+`CUDA_HOME` and `nvcc`:
 
 ```bash
 uv run python - <<'PY'
 import glob
+import shutil
 from torch.utils.cpp_extension import CUDA_HOME
 print("torch CUDA_HOME:", CUDA_HOME)
 print("candidate CUDA roots:", glob.glob("/usr/local/cuda*"))
+print("nvcc:", shutil.which("nvcc"))
 PY
+```
 
-export CUDA_HOME=/usr/local/cuda
+If this prints no CUDA root and no `nvcc`, install a CUDA toolkit that matches
+the driver-supported CUDA major version. On Ubuntu images with NVIDIA apt
+repositories configured, prefer the toolkit-only package so the driver is not
+replaced:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y cuda-toolkit-12-4
+```
+
+If apt does not know that package, install the NVIDIA CUDA apt repository for
+the machine's Ubuntu version, then rerun the toolkit install. After installation,
+set the CUDA environment:
+
+```bash
+export CUDA_HOME=/usr/local/cuda-12.4
 export PATH="$CUDA_HOME/bin:$PATH"
 export LD_LIBRARY_PATH="$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}"
 ```
 
-If the machine has only a driver/runtime and no CUDA toolkit, `deep_gemm` can be
-removed so SGLang falls back to default kernels:
-
-```bash
-uv pip uninstall -y deep-gemm deep_gemm
-```
-
-If `uv pip uninstall` says no package is installed but SGLang still imports
-`site-packages/deep_gemm`, quarantine the import folder directly:
+If you previously quarantined `deep_gemm`, restore it before starting SGLang:
 
 ```bash
 uv run python - <<'PY'
@@ -121,30 +132,19 @@ import pathlib
 import sysconfig
 
 site = pathlib.Path(sysconfig.get_paths()["purelib"])
-paths = sorted(site.glob("*deep*gemm*"))
-print("site-packages:", site)
-for path in paths:
-    print(path)
-PY
-
-uv run python - <<'PY'
-import pathlib
-import sysconfig
-
-site = pathlib.Path(sysconfig.get_paths()["purelib"])
-for name in ("deep_gemm", "deep_gemm_disabled"):
-    print(name, (site / name).exists())
-source = site / "deep_gemm"
-target = site / "deep_gemm.disabled"
+source = site / "deep_gemm.disabled"
+target = site / "deep_gemm"
 if source.exists() and not target.exists():
     source.rename(target)
-    print("renamed", source, "->", target)
+    print("restored", source, "->", target)
 PY
 ```
 
-Then start SGLang:
+Then start SGLang with DeepGEMM enabled:
 
 ```bash
+SGLANG_ENABLE_JIT_DEEPGEMM=1 \
+SGLANG_JIT_DEEPGEMM_PRECOMPILE=1 \
 uv run python -m sglang.launch_server \
   --model-path Qwen/Qwen3.5-0.8B \
   --host 127.0.0.1 \
@@ -152,9 +152,12 @@ uv run python -m sglang.launch_server \
   --mem-fraction-static 0.75
 ```
 
-For a small labeler-only fallback, disable JIT DeepGEMM as well:
+If you need a temporary fallback on a driver/runtime-only image, remove or
+quarantine broken `deep_gemm` and disable the JIT path:
 
 ```bash
+uv pip uninstall -y deep-gemm deep_gemm
+
 SGLANG_ENABLE_JIT_DEEPGEMM=0 \
 SGLANG_JIT_DEEPGEMM_PRECOMPILE=0 \
 uv run python -m sglang.launch_server \
@@ -166,8 +169,6 @@ uv run python -m sglang.launch_server \
 
 On H100, SGLang may auto-enable DeepGEMM if the package is installed. DeepGEMM
 is worth using for hot serving paths, but it requires a visible CUDA toolkit.
-For the 0.8B labeler, default kernels are usually fast enough if CUDA_HOME is
-not available.
 
 Then label from another terminal without reloading weights:
 
