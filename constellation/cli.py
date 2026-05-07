@@ -19,6 +19,7 @@ from constellation.categorization import (
 from constellation.config import artifact_path
 from constellation.eval import run_eval_from_config
 from constellation.filtering import passes_basic_filters
+from constellation.inspection import inspect_samples
 from constellation.io import iter_jsonl, write_jsonl
 from constellation.llm_labeling import DEFAULT_LLM_LABEL_MODEL, llm_label_jsonl
 from constellation.model_labeling import DEFAULT_ZERO_SHOT_MODEL, model_label_jsonl
@@ -221,6 +222,19 @@ def report_labels(args: argparse.Namespace) -> int:
         )
     else:
         report = label_report(artifact_path(args.input), top_examples=args.top_examples)
+    print(json.dumps(report, indent=2))
+    return 0
+
+
+def inspect_rows(args: argparse.Namespace) -> int:
+    report = inspect_samples(
+        artifact_path(args.input),
+        sample_id=args.id,
+        label=args.label,
+        axis=args.axis,
+        limit=args.limit,
+        max_chars=args.max_chars,
+    )
     print(json.dumps(report, indent=2))
     return 0
 
@@ -471,6 +485,22 @@ def build_parser() -> argparse.ArgumentParser:
     report_cmd.add_argument("--output", type=Path)
     report_cmd.add_argument("--top-examples", type=int, default=0)
     report_cmd.set_defaults(func=report_labels)
+
+    inspect_cmd = subcommands.add_parser(
+        "inspect-sample",
+        help="print labeled sample text and metadata by id or label",
+    )
+    inspect_cmd.add_argument("--input", type=Path, required=True)
+    inspect_cmd.add_argument("--id")
+    inspect_cmd.add_argument("--label")
+    inspect_cmd.add_argument(
+        "--axis",
+        choices=("capabilities", "domains"),
+        default="domains",
+    )
+    inspect_cmd.add_argument("--limit", type=int, default=5)
+    inspect_cmd.add_argument("--max-chars", type=int, default=4000)
+    inspect_cmd.set_defaults(func=inspect_rows)
 
     sample_cmd = subcommands.add_parser(
         "sample-jsonl",
