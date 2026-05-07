@@ -89,6 +89,19 @@ its OpenAI-compatible API. In one GPU terminal:
 uv pip install -r requirements/serve.txt
 ```
 
+If SGLang reports the PyTorch 2.9.1 / CuDNN compatibility check, install the
+newer CuDNN wheel into the same `uv` environment:
+
+```bash
+uv pip install nvidia-cudnn-cu12==9.16.0.29
+
+uv run python - <<'PY'
+import torch
+print("torch:", torch.__version__)
+print("cudnn:", torch.backends.cudnn.version())
+PY
+```
+
 For maximum SGLang throughput on H100, use DeepGEMM. DeepGEMM needs a visible
 CUDA toolkit, not just the NVIDIA driver/runtime. Confirm the machine has
 `CUDA_HOME` and `nvcc`:
