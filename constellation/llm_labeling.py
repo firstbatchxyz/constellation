@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
+import urllib.error
+import urllib.request
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +22,10 @@ LLM_LABEL_METHOD = "llm_json_v2"
 
 class OptionalLLMLabelingDependencyError(RuntimeError):
     """Raised when llm-label dependencies are not installed."""
+
+
+class OpenAICompatibleLabelingError(RuntimeError):
+    """Raised when an OpenAI-compatible labeling server returns an error."""
 
 
 def taxonomy_block(taxonomy: CapabilityTaxonomy, *, title: str) -> str:
@@ -342,6 +350,102 @@ def _pad_token_id(processor: Any) -> int | None:
     return None
 
 
+def normalize_openai_base_url(api_base: str) -> str:
+    base = api_base.rstrip("/")
+    if base.endswith("/v1/chat/completions"):
+        return base[: -len("/chat/completions")]
+    if not base.endswith("/v1"):
+        base = f"{base}/v1"
+    return base
+
+
+def openai_chat_completion_url(api_base: str) -> str:
+    return f"{normalize_openai_base_url(api_base)}/chat/completions"
+
+
+def openai_message_content(prompt: str, *, model_name: str, content_format: str) -> Any:
+    resolved_format = content_format
+    if resolved_format == "auto":
+        lowered = model_name.lower()
+        resolved_format = "parts" if "qwen3.5" in lowered or "vl" in lowered else "string"
+    if resolved_format == "parts":
+        return [{"type": "text", "text": prompt}]
+    return prompt
+
+
+def parse_openai_chat_response(payload: dict[str, Any]) -> str:
+    choices = payload.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise OpenAICompatibleLabelingError("chat response did not contain choices")
+    message = choices[0].get("message") if isinstance(choices[0], dict) else None
+    if not isinstance(message, dict):
+        raise OpenAICompatibleLabelingError("chat response choice did not contain a message")
+    content = message.get("content")
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, dict) and isinstance(item.get("text"), str):
+                parts.append(item["text"])
+        if parts:
+            return "\n".join(parts).strip()
+    raise OpenAICompatibleLabelingError("chat response message did not contain text content")
+
+
+def make_openai_chat_generator(
+    *,
+    api_base: str,
+    api_key: str | None,
+    model_name: str,
+    max_new_tokens: int,
+    request_timeout: float,
+    content_format: str,
+) -> Callable[[str], str]:
+    url = openai_chat_completion_url(api_base)
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    def generate(prompt: str) -> str:
+        payload = {
+            "model": model_name,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": openai_message_content(
+                        prompt,
+                        model_name=model_name,
+                        content_format=content_format,
+                    ),
+                }
+            ],
+            "temperature": 0,
+            "max_tokens": max_new_tokens,
+        }
+        request = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=request_timeout) as response:
+                response_payload = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            raise OpenAICompatibleLabelingError(
+                f"OpenAI-compatible server returned HTTP {exc.code}: {body[:1000]}"
+            ) from exc
+        except urllib.error.URLError as exc:
+            raise OpenAICompatibleLabelingError(
+                f"could not reach OpenAI-compatible server at {url}: {exc.reason}"
+            ) from exc
+        return parse_openai_chat_response(response_payload)
+
+    return generate
+
+
 def make_generator(
     *,
     processor: Any,
@@ -425,6 +529,12 @@ def llm_label_jsonl(
     max_chars: int = 12000,
     max_input_tokens: int = 8192,
     max_new_tokens: int = 384,
+    backend: str = "auto",
+    api_base: str | None = None,
+    api_key: str | None = None,
+    request_timeout: float = 120.0,
+    api_content_format: str = "auto",
+    concurrency: int = 1,
     device: int | None = None,
     dtype: str = "auto",
     trust_remote_code: bool = False,
@@ -433,60 +543,107 @@ def llm_label_jsonl(
 ) -> dict[str, Any]:
     capability_taxonomy = CapabilityTaxonomy.load(taxonomy_path)
     domain_taxonomy = DomainTaxonomy.load(domain_taxonomy_path)
+    resolved_api_base = api_base or os.environ.get("CONSTELLATION_LLM_API_BASE") or os.environ.get("SGLANG_API_BASE")
+    resolved_api_key = api_key or os.environ.get("CONSTELLATION_LLM_API_KEY") or os.environ.get("SGLANG_API_KEY")
+    generator_backend = "custom"
     if generator is None:
-        processor, model, resolved_device, backend = require_generation_model(
-            model_name,
-            device=device,
-            dtype=dtype,
-            trust_remote_code=trust_remote_code,
+        use_api_backend = backend in {"openai-compatible", "sglang"} or (
+            backend == "auto" and resolved_api_base
         )
-        generator = make_generator(
-            processor=processor,
-            model=model,
-            device=resolved_device,
-            backend=backend,
-            max_input_tokens=max_input_tokens,
-            max_new_tokens=max_new_tokens,
-        )
+        if use_api_backend:
+            if not resolved_api_base:
+                resolved_api_base = "http://127.0.0.1:30000/v1"
+            generator_backend = "sglang" if backend == "sglang" else "openai-compatible"
+            generator = make_openai_chat_generator(
+                api_base=resolved_api_base,
+                api_key=resolved_api_key,
+                model_name=model_name,
+                max_new_tokens=max_new_tokens,
+                request_timeout=request_timeout,
+                content_format=api_content_format,
+            )
+        else:
+            generator_backend = "transformers"
+            processor, model, resolved_device, transformer_backend = require_generation_model(
+                model_name,
+                device=device,
+                dtype=dtype,
+                trust_remote_code=trust_remote_code,
+            )
+            generator = make_generator(
+                processor=processor,
+                model=model,
+                device=resolved_device,
+                backend=transformer_backend,
+                max_input_tokens=max_input_tokens,
+                max_new_tokens=max_new_tokens,
+            )
 
     capability_counts = {label: 0 for label in capability_taxonomy.names}
     domain_counts = {label: 0 for label in domain_taxonomy.names}
     written = 0
     empty = 0
     parse_errors = 0
+    effective_concurrency = max(1, concurrency if generator_backend in {"openai-compatible", "sglang"} else 1)
+
+    def label_row(row: dict[str, Any]) -> tuple[CanonicalSample, bool]:
+        sample = CanonicalSample.from_dict(row)
+        prompt = build_llm_label_prompt(
+            sample,
+            capability_taxonomy=capability_taxonomy,
+            domain_taxonomy=domain_taxonomy,
+            max_chars=max_chars,
+        )
+        response = generator(prompt)
+        return label_sample_with_llm_response(
+            sample,
+            response_text=response,
+            capability_taxonomy=capability_taxonomy,
+            domain_taxonomy=domain_taxonomy,
+            model_name=model_name,
+            max_capabilities=max_capabilities,
+            max_domains=max_domains,
+        )
+
+    def record(sample: CanonicalSample, parsed_ok: bool) -> None:
+        nonlocal written, empty, parse_errors
+        if not parsed_ok:
+            parse_errors += 1
+        if not sample.capabilities and not sample.domains:
+            empty += 1
+        for label in sample.capabilities:
+            capability_counts[label] = capability_counts.get(label, 0) + 1
+        for label in sample.domains:
+            domain_counts[label] = domain_counts.get(label, 0) + 1
+        written += 1
 
     def rows() -> Any:
-        nonlocal written, empty, parse_errors
-        for row in iter_jsonl(input_path):
-            if limit is not None and written >= limit:
-                break
-            sample = CanonicalSample.from_dict(row)
-            prompt = build_llm_label_prompt(
-                sample,
-                capability_taxonomy=capability_taxonomy,
-                domain_taxonomy=domain_taxonomy,
-                max_chars=max_chars,
-            )
-            response = generator(prompt)
-            sample, parsed_ok = label_sample_with_llm_response(
-                sample,
-                response_text=response,
-                capability_taxonomy=capability_taxonomy,
-                domain_taxonomy=domain_taxonomy,
-                model_name=model_name,
-                max_capabilities=max_capabilities,
-                max_domains=max_domains,
-            )
-            if not parsed_ok:
-                parse_errors += 1
-            if not sample.capabilities and not sample.domains:
-                empty += 1
-            for label in sample.capabilities:
-                capability_counts[label] = capability_counts.get(label, 0) + 1
-            for label in sample.domains:
-                domain_counts[label] = domain_counts.get(label, 0) + 1
-            written += 1
-            yield sample.to_dict()
+        submitted = 0
+        if effective_concurrency <= 1:
+            for row in iter_jsonl(input_path):
+                if limit is not None and submitted >= limit:
+                    break
+                sample, parsed_ok = label_row(row)
+                record(sample, parsed_ok)
+                submitted += 1
+                yield sample.to_dict()
+            return
+
+        pending = []
+        with ThreadPoolExecutor(max_workers=effective_concurrency) as executor:
+            for row in iter_jsonl(input_path):
+                if limit is not None and submitted >= limit:
+                    break
+                pending.append(executor.submit(label_row, row))
+                submitted += 1
+                if len(pending) >= effective_concurrency:
+                    sample, parsed_ok = pending.pop(0).result()
+                    record(sample, parsed_ok)
+                    yield sample.to_dict()
+            for future in pending:
+                sample, parsed_ok = future.result()
+                record(sample, parsed_ok)
+                yield sample.to_dict()
 
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     write_jsonl(output_path, rows())
@@ -495,6 +652,9 @@ def llm_label_jsonl(
         "output": str(output_path),
         "model": model_name,
         "method": LLM_LABEL_METHOD,
+        "backend": generator_backend,
+        "api_base": normalize_openai_base_url(resolved_api_base) if resolved_api_base else None,
+        "concurrency": effective_concurrency,
         "taxonomy_version": capability_taxonomy.version,
         "domain_taxonomy_version": domain_taxonomy.version,
         "written": written,

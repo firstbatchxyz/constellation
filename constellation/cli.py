@@ -195,6 +195,12 @@ def llm_label(args: argparse.Namespace) -> int:
         max_chars=args.max_chars,
         max_input_tokens=args.max_input_tokens,
         max_new_tokens=args.max_new_tokens,
+        backend=args.backend,
+        api_base=args.api_base,
+        api_key=args.api_key,
+        request_timeout=args.request_timeout,
+        api_content_format=args.api_content_format,
+        concurrency=args.concurrency,
         device=args.device,
         dtype=args.dtype,
         trust_remote_code=args.trust_remote_code,
@@ -412,6 +418,25 @@ def build_parser() -> argparse.ArgumentParser:
     llm_label_cmd.add_argument("--max-chars", type=int, default=12000)
     llm_label_cmd.add_argument("--max-input-tokens", type=int, default=8192)
     llm_label_cmd.add_argument("--max-new-tokens", type=int, default=384)
+    llm_label_cmd.add_argument(
+        "--backend",
+        choices=("auto", "transformers", "openai-compatible", "sglang"),
+        default="auto",
+        help="use in-process Transformers or an OpenAI-compatible server such as SGLang",
+    )
+    llm_label_cmd.add_argument(
+        "--api-base",
+        help="OpenAI-compatible base URL, e.g. http://127.0.0.1:30000/v1",
+    )
+    llm_label_cmd.add_argument("--api-key")
+    llm_label_cmd.add_argument("--request-timeout", type=float, default=120.0)
+    llm_label_cmd.add_argument(
+        "--api-content-format",
+        choices=("auto", "string", "parts"),
+        default="auto",
+        help="send OpenAI user content as a string or text content part array",
+    )
+    llm_label_cmd.add_argument("--concurrency", type=int, default=1)
     llm_label_cmd.add_argument("--device", type=int)
     llm_label_cmd.add_argument(
         "--dtype",

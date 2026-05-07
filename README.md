@@ -71,6 +71,10 @@ coding-domain bias. It reads the taxonomy and emits strict JSON labels. The
 older `model-label` NLI scorer is still useful as a very fast baseline/audit
 path. Weak relabeling is only a fallback/audit path.
 
+For speed, run the labeler behind SGLang and call `llm-label --backend sglang`
+so model weights stay resident while Constellation streams JSONL rows through
+the OpenAI-compatible API.
+
 ## Core Training Rule
 
 Tool observations are context, not targets.

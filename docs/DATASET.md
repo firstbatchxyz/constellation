@@ -82,6 +82,34 @@ uv pip install -r requirements/labeling.txt
 The labeling requirements pin a current Transformers version because Qwen3 and
 Qwen3.5 tokenizers/model classes need recent support.
 
+For larger labeling passes, serve the labeler with SGLang and send requests to
+its OpenAI-compatible API. In one GPU terminal:
+
+```bash
+uv pip install -r requirements/serve.txt
+
+uv run python -m sglang.launch_server \
+  --model-path Qwen/Qwen3.5-0.8B \
+  --host 127.0.0.1 \
+  --port 30000 \
+  --mem-fraction-static 0.75
+```
+
+Then label from another terminal without reloading weights:
+
+```bash
+uv run python -m constellation.cli llm-label \
+  --backend sglang \
+  --api-base http://127.0.0.1:30000/v1 \
+  --concurrency 16 \
+  --input '{runs_dir}/labeling/domain_probes.canonical.jsonl' \
+  --output '{runs_dir}/labeling/domain_probes.qwen35_08_sglang.jsonl'
+```
+
+SGLang exposes OpenAI-compatible `/v1/chat/completions`, so the same
+`--backend openai-compatible` path can point at vLLM or another compatible
+server later.
+
 Use the NLI zero-shot scorer as a faster baseline or distribution sanity check:
 
 ```bash

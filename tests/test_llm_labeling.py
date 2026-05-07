@@ -11,6 +11,10 @@ from constellation.llm_labeling import (
     label_sample_with_llm_response,
     llm_label_jsonl,
     normalize_llm_payload,
+    normalize_openai_base_url,
+    openai_chat_completion_url,
+    openai_message_content,
+    parse_openai_chat_response,
 )
 from constellation.schema import CanonicalSample, CanonicalTurn
 from constellation.taxonomy import CapabilityTaxonomy, DomainTaxonomy
@@ -49,6 +53,32 @@ class LLMLabelingTests(unittest.TestCase):
 
         self.assertEqual(parsed["capabilities"], ["DEBUGGING"])
         self.assertEqual(parsed["domains"], ["SCIENCE"])
+
+    def test_openai_compatible_helpers(self):
+        self.assertEqual(
+            normalize_openai_base_url("http://127.0.0.1:30000"),
+            "http://127.0.0.1:30000/v1",
+        )
+        self.assertEqual(
+            openai_chat_completion_url("http://127.0.0.1:30000/v1"),
+            "http://127.0.0.1:30000/v1/chat/completions",
+        )
+        content = openai_message_content("label me", model_name="Qwen/Qwen3.5-0.8B", content_format="auto")
+        self.assertEqual(content, [{"type": "text", "text": "label me"}])
+        self.assertEqual(
+            parse_openai_chat_response(
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "content": '{"capabilities":[],"domains":[],"confidence":0.2}'
+                            }
+                        }
+                    ]
+                }
+            ),
+            '{"capabilities":[],"domains":[],"confidence":0.2}',
+        )
 
     def test_normalize_llm_payload_validates_labels_and_limits(self):
         normalized = normalize_llm_payload(
