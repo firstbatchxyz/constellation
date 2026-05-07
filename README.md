@@ -51,6 +51,13 @@ Use one of:
 Local files in this repo should be code, configs, docs, schemas, and small test
 fixtures only.
 
+## Dataset Labeling
+
+All rollout sources should be normalized into the shared capability taxonomy in
+[configs/capability_taxonomy.json](configs/capability_taxonomy.json). Use
+[docs/DATASET.md](docs/DATASET.md) for the dataset-first relabeling and
+ModernBERT classifier export flow.
+
 ## Core Training Rule
 
 Tool observations are context, not targets.

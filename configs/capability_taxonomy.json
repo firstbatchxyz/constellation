@@ -1,20 +1,66 @@
 {
-  "capabilities": [
-    "DEBUGGING",
-    "ERROR_RECOVERY",
-    "TERMINAL_WORKFLOW",
-    "TOOL_USE",
-    "CODEBASE_NAVIGATION",
-    "MULTI_FILE_EDITING",
-    "TEST_WRITING",
-    "PLANNING",
-    "RETRIEVAL_SEARCH",
-    "CODE_EDITING",
-    "STRUCTURED_REASONING"
-  ],
+  "version": "capability-taxonomy-v1",
+  "capabilities": {
+    "DEBUGGING": {
+      "description": "Diagnosing failures, tracebacks, regressions, incorrect outputs, or broken behavior.",
+      "positive_cues": ["debug", "bug", "traceback", "stack trace", "exception", "failing test", "regression"],
+      "source_aliases": ["debug", "debugging", "bugfix", "bug_fix", "repair", "fixing"]
+    },
+    "ERROR_RECOVERY": {
+      "description": "Recovering from failed commands, invalid assumptions, tool errors, retries, or partial progress.",
+      "positive_cues": ["retry", "recover", "failed command", "fallback", "try again", "diagnose"],
+      "source_aliases": ["recovery", "error_recovery", "retry", "self_correction"]
+    },
+    "TERMINAL_WORKFLOW": {
+      "description": "Using shell commands, command output, scripts, test runners, package managers, or CLIs.",
+      "positive_cues": ["shell", "bash", "terminal", "command", "pytest", "npm", "cargo", "uv"],
+      "source_aliases": ["terminal", "shell", "cli", "command_line", "bash"]
+    },
+    "TOOL_USE": {
+      "description": "Calling tools/functions and conditioning on observations or tool responses.",
+      "positive_cues": ["tool_call", "function call", "tool_response", "observation"],
+      "source_aliases": ["tool", "tool_use", "function_calling", "agentic_tool_use"]
+    },
+    "CODEBASE_NAVIGATION": {
+      "description": "Searching, reading, locating, and understanding files or symbols in a repository.",
+      "positive_cues": ["repository", "repo", "codebase", "search", "inspect", "read file"],
+      "source_aliases": ["repo_navigation", "codebase_navigation", "code_search", "repository_navigation"]
+    },
+    "MULTI_FILE_EDITING": {
+      "description": "Coordinated changes across multiple files, modules, tests, or interfaces.",
+      "positive_cues": ["multi-file", "multiple files", "refactor", "across files", "unified diff"],
+      "source_aliases": ["multi_file", "multi_file_editing", "refactor", "cross_file"]
+    },
+    "TEST_WRITING": {
+      "description": "Creating, updating, or reasoning about tests, fixtures, assertions, and coverage.",
+      "positive_cues": ["unit test", "tests", "test case", "coverage", "jest", "vitest"],
+      "source_aliases": ["testing", "test_generation", "test_writing", "unit_tests"]
+    },
+    "PLANNING": {
+      "description": "Decomposing goals, sequencing work, producing implementation plans, or choosing strategy.",
+      "positive_cues": ["plan", "roadmap", "milestone", "decompose", "strategy", "steps"],
+      "source_aliases": ["planning", "project_planning", "decomposition", "strategy"]
+    },
+    "RETRIEVAL_SEARCH": {
+      "description": "Searching or retrieving external/internal information, documentation, references, or facts.",
+      "positive_cues": ["search", "retrieve", "lookup", "documentation", "reference", "query"],
+      "source_aliases": ["retrieval", "search", "web_search", "document_search"]
+    },
+    "CODE_EDITING": {
+      "description": "Producing patches, diffs, implementations, edits, or code modifications.",
+      "positive_cues": ["edit", "patch", "diff", "implementation", "modify", "change code"],
+      "source_aliases": ["code_edit", "code_editing", "implementation", "patching"]
+    },
+    "STRUCTURED_REASONING": {
+      "description": "Explicit stepwise reasoning, analysis, derivations, rationale, or structured thinking.",
+      "positive_cues": ["think", "thinking", "reasoning", "derive", "analyze"],
+      "source_aliases": ["reasoning", "structured_reasoning", "cot", "chain_of_thought", "analysis"]
+    }
+  },
   "notes": [
     "Use multi-label assignment.",
     "Do not split by programming language or framework.",
-    "Create matched general-agent and specialist subsets for every comparison."
+    "Create matched general-agent and specialist subsets for every comparison.",
+    "Use these normalized labels across all rollout sources, even when source datasets expose different category names."
   ]
 }

@@ -1,8 +1,11 @@
-"""Heuristic capability labeling for pilot curation."""
+"""Capability labeling for pilot dataset curation."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Any
+
+from constellation.taxonomy import CapabilityTaxonomy
 
 CAPABILITY_KEYWORDS: dict[str, tuple[str, ...]] = {
     "DEBUGGING": (
@@ -103,25 +106,91 @@ CAPABILITY_KEYWORDS: dict[str, tuple[str, ...]] = {
     ),
 }
 
+SOURCE_CATEGORY_FIELDS = (
+    "category",
+    "subcategory",
+    "task",
+    "task_type",
+    "source_category",
+    "original_source",
+)
 
-def label_capabilities(*, row: dict[str, Any], text: str) -> list[str]:
+
+@dataclass
+class LabelEvidence:
+    label: str
+    score: float
+    sources: list[str] = field(default_factory=list)
+    cues: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "label": self.label,
+            "score": round(self.score, 4),
+            "sources": sorted(set(self.sources)),
+            "cues": sorted(set(self.cues)),
+        }
+
+
+def source_category_values(row: dict[str, Any]) -> list[str]:
+    values: list[str] = []
+    for field in SOURCE_CATEGORY_FIELDS:
+        value = row.get(field)
+        if isinstance(value, str) and value.strip():
+            values.append(value)
+        elif isinstance(value, list):
+            values.extend(str(item) for item in value if str(item).strip())
+    metadata = row.get("metadata")
+    if isinstance(metadata, dict):
+        for field in SOURCE_CATEGORY_FIELDS:
+            value = metadata.get(field)
+            if isinstance(value, str) and value.strip():
+                values.append(value)
+    return values
+
+
+def label_capability_evidence(
+    *,
+    row: dict[str, Any],
+    text: str,
+    taxonomy: CapabilityTaxonomy | None = None,
+) -> list[LabelEvidence]:
+    taxonomy = taxonomy or CapabilityTaxonomy.load()
+    cues_by_label = taxonomy.cues_by_capability()
+    evidence: dict[str, LabelEvidence] = {}
+
+    def add(label: str, score: float, source: str, cue: str) -> None:
+        entry = evidence.setdefault(label, LabelEvidence(label=label, score=0.0))
+        entry.score = min(1.0, max(entry.score, score))
+        entry.sources.append(source)
+        entry.cues.append(cue)
+
     haystack_parts = [
         text,
-        str(row.get("category") or ""),
-        str(row.get("subcategory") or ""),
-        str(row.get("task") or ""),
-        str(row.get("original_source") or ""),
+        *source_category_values(row),
     ]
     haystack = "\n".join(haystack_parts).lower()
 
-    labels = [
-        capability
-        for capability, keywords in CAPABILITY_KEYWORDS.items()
-        if any(keyword.lower() in haystack for keyword in keywords)
-    ]
-    if "TOOL_USE" not in labels and any(marker in haystack for marker in ("<tool", "tool ")):
-        labels.append("TOOL_USE")
-    return sorted(set(labels))
+    for label, cues in cues_by_label.items():
+        if not cues:
+            cues = CAPABILITY_KEYWORDS.get(label, ())
+        matched = [cue for cue in cues if cue.lower() in haystack]
+        if matched:
+            add(label, min(0.95, 0.45 + 0.10 * len(matched)), "heuristic_keyword", matched[0])
+
+    for raw_value in source_category_values(row):
+        normalized = taxonomy.normalize_label(raw_value)
+        if normalized is not None:
+            add(normalized, 0.75, "source_category_alias", raw_value)
+
+    if "TOOL_USE" not in evidence and any(marker in haystack for marker in ("<tool", "tool ")):
+        add("TOOL_USE", 0.55, "heuristic_marker", "tool")
+
+    return sorted(evidence.values(), key=lambda item: (-item.score, item.label))
+
+
+def label_capabilities(*, row: dict[str, Any], text: str) -> list[str]:
+    return sorted({evidence.label for evidence in label_capability_evidence(row=row, text=text)})
 
 
 def sample_type_for_row(*, row: dict[str, Any], text: str) -> str:

@@ -99,6 +99,7 @@ class ParserTests(unittest.TestCase):
         self.assertIs(sample.success, True)
         self.assertEqual(sample.metadata["task"], "solve")
         self.assertIn("DEBUGGING", sample.capabilities)
+        self.assertIn("TERMINAL_WORKFLOW", sample.capabilities)
 
     def test_basic_filters_reject_failed_when_required(self):
         sample = parse_agenttrove_row(

@@ -10,6 +10,11 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from constellation.categorization import (
+    export_classifier_jsonl,
+    relabel_jsonl,
+    write_taxonomy_markdown,
+)
 from constellation.config import artifact_path
 from constellation.eval import run_eval_from_config
 from constellation.filtering import passes_basic_filters
@@ -116,6 +121,37 @@ def eval_models(args: argparse.Namespace) -> int:
     return 0
 
 
+def relabel_capabilities(args: argparse.Namespace) -> int:
+    summary = relabel_jsonl(
+        input_path=artifact_path(args.input),
+        output_path=artifact_path(args.output),
+        taxonomy_path=args.taxonomy,
+        min_score=args.min_score,
+        max_chars=args.max_chars,
+    )
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
+def export_classifier(args: argparse.Namespace) -> int:
+    summary = export_classifier_jsonl(
+        input_path=artifact_path(args.input),
+        output_path=artifact_path(args.output),
+        taxonomy_path=args.taxonomy,
+        min_score=args.min_score,
+        max_chars=args.max_chars,
+        include_unlabeled=args.include_unlabeled,
+    )
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
+def taxonomy_docs(args: argparse.Namespace) -> int:
+    summary = write_taxonomy_markdown(args.taxonomy, artifact_path(args.output))
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(prog="constellation")
     subcommands = root.add_subparsers(dest="command", required=True)
@@ -184,6 +220,37 @@ def build_parser() -> argparse.ArgumentParser:
     eval_cmd = subcommands.add_parser("eval", help="run debugging generation eval from JSON config")
     eval_cmd.add_argument("--config", type=Path, required=True)
     eval_cmd.set_defaults(func=eval_models)
+
+    relabel_cmd = subcommands.add_parser(
+        "relabel-capabilities",
+        help="rewrite canonical JSONL with normalized taxonomy labels and evidence",
+    )
+    relabel_cmd.add_argument("--input", type=Path, required=True)
+    relabel_cmd.add_argument("--output", type=Path, required=True)
+    relabel_cmd.add_argument("--taxonomy", type=Path, default=Path("configs/capability_taxonomy.json"))
+    relabel_cmd.add_argument("--min-score", type=float, default=0.45)
+    relabel_cmd.add_argument("--max-chars", type=int, default=24000)
+    relabel_cmd.set_defaults(func=relabel_capabilities)
+
+    export_cmd = subcommands.add_parser(
+        "export-classifier-data",
+        help="export text/label-vector JSONL for ModernBERT-style multi-label training",
+    )
+    export_cmd.add_argument("--input", type=Path, required=True)
+    export_cmd.add_argument("--output", type=Path, required=True)
+    export_cmd.add_argument("--taxonomy", type=Path, default=Path("configs/capability_taxonomy.json"))
+    export_cmd.add_argument("--min-score", type=float, default=0.45)
+    export_cmd.add_argument("--max-chars", type=int, default=24000)
+    export_cmd.add_argument("--include-unlabeled", action="store_true")
+    export_cmd.set_defaults(func=export_classifier)
+
+    taxonomy_cmd = subcommands.add_parser(
+        "taxonomy-docs",
+        help="render the capability taxonomy to Markdown for review",
+    )
+    taxonomy_cmd.add_argument("--taxonomy", type=Path, default=Path("configs/capability_taxonomy.json"))
+    taxonomy_cmd.add_argument("--output", type=Path, required=True)
+    taxonomy_cmd.set_defaults(func=taxonomy_docs)
 
     return root
 
