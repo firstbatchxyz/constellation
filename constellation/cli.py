@@ -23,6 +23,7 @@ from constellation.io import iter_jsonl, write_jsonl
 from constellation.llm_labeling import DEFAULT_LLM_LABEL_MODEL, llm_label_jsonl
 from constellation.model_labeling import DEFAULT_ZERO_SHOT_MODEL, model_label_jsonl
 from constellation.parsers import parse_agenttrove_row, parse_hermes_row
+from constellation.probes import probe_report, write_labeling_probes
 from constellation.reporting import label_report, write_label_report
 from constellation.sampling import sample_jsonl
 from constellation.schema import CanonicalSample
@@ -229,6 +230,21 @@ def sample_rows(args: argparse.Namespace) -> int:
     return 0
 
 
+def write_probes(args: argparse.Namespace) -> int:
+    summary = write_labeling_probes(artifact_path(args.output))
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
+def report_probes(args: argparse.Namespace) -> int:
+    report = probe_report(
+        artifact_path(args.input),
+        artifact_path(args.output) if args.output else None,
+    )
+    print(json.dumps(report, indent=2))
+    return 0
+
+
 def export_classifier(args: argparse.Namespace) -> int:
     summary = export_classifier_jsonl(
         input_path=artifact_path(args.input),
@@ -430,6 +446,21 @@ def build_parser() -> argparse.ArgumentParser:
     sample_cmd.add_argument("--limit", type=int)
     sample_cmd.add_argument("--seed", default="constellation-v1")
     sample_cmd.set_defaults(func=sample_rows)
+
+    probes_cmd = subcommands.add_parser(
+        "write-labeling-probes",
+        help="write handpicked canonical probes for cross-domain labeler calibration",
+    )
+    probes_cmd.add_argument("--output", type=Path, required=True)
+    probes_cmd.set_defaults(func=write_probes)
+
+    probe_report_cmd = subcommands.add_parser(
+        "probe-report",
+        help="compare labeled probe rows against expected capability/domain labels",
+    )
+    probe_report_cmd.add_argument("--input", type=Path, required=True)
+    probe_report_cmd.add_argument("--output", type=Path)
+    probe_report_cmd.set_defaults(func=report_probes)
 
     export_cmd = subcommands.add_parser(
         "export-classifier-data",

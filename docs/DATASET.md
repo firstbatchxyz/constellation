@@ -89,6 +89,20 @@ uv run python -m constellation.cli model-label \
 
 The default NLI model is `cross-encoder/nli-MiniLM2-L6-H768`.
 
+Calibrate Qwen on handpicked cross-domain probes before trusting a full merge:
+
+```bash
+uv run python -m constellation.cli write-labeling-probes \
+  --output '{runs_dir}/labeling/domain_probes.canonical.jsonl'
+
+uv run python -m constellation.cli llm-label \
+  --input '{runs_dir}/labeling/domain_probes.canonical.jsonl' \
+  --output '{runs_dir}/labeling/domain_probes.qwen06_labeled.jsonl'
+
+uv run python -m constellation.cli probe-report \
+  --input '{runs_dir}/labeling/domain_probes.qwen06_labeled.jsonl'
+```
+
 Use the deterministic weak relabeler only for quick audits, fallback operation,
 or to inspect cue/evidence quality:
 
