@@ -75,6 +75,9 @@ For speed, run the labeler behind SGLang and call `llm-label --backend sglang`
 so model weights stay resident while Constellation streams JSONL rows through
 the OpenAI-compatible API.
 
+The SGLang/OpenAI-compatible path uses JSON Schema structured output by default
+to constrain label arrays to known taxonomy enums.
+
 `llm-label` also records post-LLM guardrail edits in metadata so calibration
 cleanup is auditable.
 

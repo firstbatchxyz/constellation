@@ -2,6 +2,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from constellation.llm_labeling import (
     DEFAULT_LLM_LABEL_MODEL,
@@ -10,7 +11,9 @@ from constellation.llm_labeling import (
     build_llm_label_prompt,
     extract_json_object,
     label_sample_with_llm_response,
+    label_response_schema,
     llm_label_jsonl,
+    make_openai_chat_generator,
     normalize_llm_payload,
     normalize_openai_base_url,
     openai_chat_completion_url,
@@ -80,6 +83,70 @@ class LLMLabelingTests(unittest.TestCase):
             ),
             '{"capabilities":[],"domains":[],"confidence":0.2}',
         )
+
+    def test_label_response_schema_constrains_labels(self):
+        capability_taxonomy = CapabilityTaxonomy.load()
+        domain_taxonomy = DomainTaxonomy.load()
+
+        schema = label_response_schema(
+            capability_taxonomy=capability_taxonomy,
+            domain_taxonomy=domain_taxonomy,
+            max_capabilities=4,
+            max_domains=2,
+        )
+
+        self.assertEqual(schema["type"], "object")
+        self.assertEqual(schema["properties"]["capabilities"]["maxItems"], 4)
+        self.assertIn("DEBUGGING", schema["properties"]["capabilities"]["items"]["enum"])
+        self.assertEqual(schema["properties"]["domains"]["maxItems"], 2)
+        self.assertIn("SCIENCE", schema["properties"]["domains"]["items"]["enum"])
+        self.assertFalse(schema["additionalProperties"])
+
+    def test_openai_generator_sends_structured_response_format(self):
+        captured = {}
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, traceback):
+                return False
+
+            def read(self):
+                return json.dumps(
+                    {
+                        "choices": [
+                            {
+                                "message": {
+                                    "content": '{"capabilities":[],"domains":[],"confidence":0.2,"rationale":"none"}'
+                                }
+                            }
+                        ]
+                    }
+                ).encode("utf-8")
+
+        def fake_urlopen(request, timeout):
+            del timeout
+            captured["payload"] = json.loads(request.data.decode("utf-8"))
+            return FakeResponse()
+
+        generator = make_openai_chat_generator(
+            api_base="http://127.0.0.1:30000/v1",
+            api_key=None,
+            model_name="Qwen/Qwen3.5-0.8B",
+            max_new_tokens=64,
+            request_timeout=3,
+            content_format="auto",
+            response_schema={"type": "object", "properties": {}, "required": []},
+        )
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            response = generator("label this")
+
+        self.assertIn("response_format", captured["payload"])
+        self.assertEqual(captured["payload"]["response_format"]["type"], "json_schema")
+        self.assertEqual(captured["payload"]["messages"][0]["content"], [{"type": "text", "text": "label this"}])
+        self.assertIn('"capabilities"', response)
 
     def test_normalize_llm_payload_validates_labels_and_limits(self):
         normalized = normalize_llm_payload(

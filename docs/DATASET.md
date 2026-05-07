@@ -106,6 +106,12 @@ uv run python -m constellation.cli llm-label \
   --output '{runs_dir}/labeling/domain_probes.qwen35_08_sglang.jsonl'
 ```
 
+For SGLang/OpenAI-compatible backends, `llm-label` uses structured output by
+default: it sends a JSON Schema with enum-constrained capability/domain labels,
+required fields, bounded label arrays, and no extra properties. Use
+`--no-structured-output` only when testing a server that does not support
+schema-constrained decoding.
+
 `llm-label` applies lightweight post-LLM guardrails by default. These are not a
 replacement for review; they drop clearly incompatible coding-only capabilities
 from non-coding tasks and add obvious broad labels such as `STRUCTURED_REASONING`

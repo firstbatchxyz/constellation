@@ -575,6 +575,43 @@ def parse_openai_chat_response(payload: dict[str, Any]) -> str:
     raise OpenAICompatibleLabelingError("chat response message did not contain text content")
 
 
+def label_response_schema(
+    *,
+    capability_taxonomy: CapabilityTaxonomy,
+    domain_taxonomy: DomainTaxonomy,
+    max_capabilities: int,
+    max_domains: int,
+) -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "capabilities": {
+                "type": "array",
+                "items": {"type": "string", "enum": list(capability_taxonomy.names)},
+                "maxItems": max_capabilities,
+                "uniqueItems": True,
+            },
+            "domains": {
+                "type": "array",
+                "items": {"type": "string", "enum": list(domain_taxonomy.names)},
+                "maxItems": max_domains,
+                "uniqueItems": True,
+            },
+            "confidence": {
+                "type": "number",
+                "minimum": 0.0,
+                "maximum": 1.0,
+            },
+            "rationale": {
+                "type": "string",
+                "maxLength": 1000,
+            },
+        },
+        "required": ["capabilities", "domains", "confidence", "rationale"],
+        "additionalProperties": False,
+    }
+
+
 def make_openai_chat_generator(
     *,
     api_base: str,
@@ -583,6 +620,7 @@ def make_openai_chat_generator(
     max_new_tokens: int,
     request_timeout: float,
     content_format: str,
+    response_schema: dict[str, Any] | None,
 ) -> Callable[[str], str]:
     url = openai_chat_completion_url(api_base)
     headers = {"Content-Type": "application/json"}
@@ -605,6 +643,14 @@ def make_openai_chat_generator(
             "temperature": 0,
             "max_tokens": max_new_tokens,
         }
+        if response_schema is not None:
+            payload["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "constellation_labels",
+                    "schema": response_schema,
+                },
+            }
         request = urllib.request.Request(
             url,
             data=json.dumps(payload).encode("utf-8"),
@@ -717,6 +763,7 @@ def llm_label_jsonl(
     request_timeout: float = 120.0,
     api_content_format: str = "auto",
     concurrency: int = 1,
+    structured_output: bool = True,
     label_guardrails: bool = True,
     device: int | None = None,
     dtype: str = "auto",
@@ -737,6 +784,16 @@ def llm_label_jsonl(
             if not resolved_api_base:
                 resolved_api_base = "http://127.0.0.1:30000/v1"
             generator_backend = "sglang" if backend == "sglang" else "openai-compatible"
+            response_schema = (
+                label_response_schema(
+                    capability_taxonomy=capability_taxonomy,
+                    domain_taxonomy=domain_taxonomy,
+                    max_capabilities=max_capabilities,
+                    max_domains=max_domains,
+                )
+                if structured_output
+                else None
+            )
             generator = make_openai_chat_generator(
                 api_base=resolved_api_base,
                 api_key=resolved_api_key,
@@ -744,6 +801,7 @@ def llm_label_jsonl(
                 max_new_tokens=max_new_tokens,
                 request_timeout=request_timeout,
                 content_format=api_content_format,
+                response_schema=response_schema,
             )
         else:
             generator_backend = "transformers"
@@ -839,6 +897,7 @@ def llm_label_jsonl(
         "backend": generator_backend,
         "api_base": normalize_openai_base_url(resolved_api_base) if resolved_api_base else None,
         "concurrency": effective_concurrency,
+        "structured_output": structured_output if generator_backend in {"openai-compatible", "sglang"} else False,
         "label_guardrails": label_guardrails,
         "taxonomy_version": capability_taxonomy.version,
         "domain_taxonomy_version": domain_taxonomy.version,
