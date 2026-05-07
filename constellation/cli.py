@@ -232,6 +232,8 @@ def inspect_rows(args: argparse.Namespace) -> int:
         sample_id=args.id,
         label=args.label,
         axis=args.axis,
+        empty=args.empty,
+        parse_errors=args.parse_errors,
         limit=args.limit,
         max_chars=args.max_chars,
     )
@@ -493,6 +495,8 @@ def build_parser() -> argparse.ArgumentParser:
     inspect_cmd.add_argument("--input", type=Path, required=True)
     inspect_cmd.add_argument("--id")
     inspect_cmd.add_argument("--label")
+    inspect_cmd.add_argument("--empty", action="store_true", help="show rows with no capability or domain labels")
+    inspect_cmd.add_argument("--parse-errors", action="store_true", help="show rows where LLM label parsing failed")
     inspect_cmd.add_argument(
         "--axis",
         choices=("capabilities", "domains"),
