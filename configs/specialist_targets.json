@@ -1,0 +1,146 @@
+{
+  "version": "specialist-targets-v1",
+  "max_distillations": 20,
+  "targets": [
+    {
+      "id": "debugger",
+      "model_name": "Qwen3-4B-Debugger",
+      "target_capabilities": ["DEBUGGING"],
+      "target_domains": ["CODING_SOFTWARE"],
+      "description": "Diagnose and repair failing software behavior."
+    },
+    {
+      "id": "terminal_workflow",
+      "model_name": "Qwen3-4B-Terminal",
+      "target_capabilities": ["TERMINAL_WORKFLOW", "TOOL_USE"],
+      "target_domains": ["CODING_SOFTWARE"],
+      "description": "Use shell, tools, and observations efficiently."
+    },
+    {
+      "id": "code_editor",
+      "model_name": "Qwen3-4B-CodeEditor",
+      "target_capabilities": ["CODE_EDITING"],
+      "target_domains": ["CODING_SOFTWARE"],
+      "description": "Produce focused code edits and patches."
+    },
+    {
+      "id": "repo_navigator",
+      "model_name": "Qwen3-4B-RepoNavigator",
+      "target_capabilities": ["CODEBASE_NAVIGATION", "RETRIEVAL_SEARCH"],
+      "target_domains": ["CODING_SOFTWARE"],
+      "description": "Search, inspect, and understand repositories."
+    },
+    {
+      "id": "error_recovery",
+      "model_name": "Qwen3-4B-Recovery",
+      "target_capabilities": ["ERROR_RECOVERY", "TOOL_USE"],
+      "target_domains": [],
+      "description": "Recover from failed steps and bad assumptions."
+    },
+    {
+      "id": "test_writer",
+      "model_name": "Qwen3-4B-TestWriter",
+      "target_capabilities": ["TEST_WRITING", "CODE_EDITING"],
+      "target_domains": ["CODING_SOFTWARE"],
+      "description": "Write, repair, and reason about tests."
+    },
+    {
+      "id": "planner",
+      "model_name": "Qwen3-4B-Planner",
+      "target_capabilities": ["PLANNING", "STRUCTURED_REASONING"],
+      "target_domains": [],
+      "description": "Decompose tasks and produce robust plans."
+    },
+    {
+      "id": "science_reasoner",
+      "model_name": "Qwen3-4B-ScienceReasoner",
+      "target_capabilities": ["STRUCTURED_REASONING"],
+      "target_domains": ["SCIENCE"],
+      "description": "Reason about scientific mechanisms, evidence, and experiments."
+    },
+    {
+      "id": "scientific_researcher",
+      "model_name": "Qwen3-4B-ScientificResearcher",
+      "target_capabilities": ["RETRIEVAL_SEARCH", "STRUCTURED_REASONING"],
+      "target_domains": ["SCIENCE"],
+      "description": "Synthesize scientific references and evidence."
+    },
+    {
+      "id": "math_reasoner",
+      "model_name": "Qwen3-4B-MathReasoner",
+      "target_capabilities": ["STRUCTURED_REASONING"],
+      "target_domains": ["MATHEMATICS"],
+      "description": "Solve mathematical and formal reasoning tasks."
+    },
+    {
+      "id": "data_analyst",
+      "model_name": "Qwen3-4B-DataAnalyst",
+      "target_capabilities": ["STRUCTURED_REASONING"],
+      "target_domains": ["DATA_ANALYSIS"],
+      "description": "Interpret data, statistics, tables, charts, and metrics."
+    },
+    {
+      "id": "medical_reasoner",
+      "model_name": "Qwen3-4B-MedicalReasoner",
+      "target_capabilities": ["STRUCTURED_REASONING"],
+      "target_domains": ["MEDICINE_HEALTH"],
+      "description": "Reason over biomedical and health-related content."
+    },
+    {
+      "id": "humanities_analyst",
+      "model_name": "Qwen3-4B-HumanitiesAnalyst",
+      "target_capabilities": ["STRUCTURED_REASONING"],
+      "target_domains": ["HUMANITIES"],
+      "description": "Analyze history, philosophy, literature, culture, and art."
+    },
+    {
+      "id": "history_reasoner",
+      "model_name": "Qwen3-4B-HistoryReasoner",
+      "target_capabilities": ["STRUCTURED_REASONING", "RETRIEVAL_SEARCH"],
+      "target_domains": ["HUMANITIES"],
+      "description": "Reason about historical evidence, context, and causality."
+    },
+    {
+      "id": "literary_analyst",
+      "model_name": "Qwen3-4B-LiteraryAnalyst",
+      "target_capabilities": ["STRUCTURED_REASONING"],
+      "target_domains": ["HUMANITIES", "WRITING"],
+      "description": "Analyze literature, rhetoric, style, and meaning."
+    },
+    {
+      "id": "writing_composer",
+      "model_name": "Qwen3-4B-Writer",
+      "target_capabilities": ["COMPOSITION"],
+      "target_domains": ["WRITING"],
+      "description": "Compose coherent long-form writing with structure and voice."
+    },
+    {
+      "id": "writing_reviser",
+      "model_name": "Qwen3-4B-Reviser",
+      "target_capabilities": ["REVISION"],
+      "target_domains": ["WRITING"],
+      "description": "Revise prose, improve style, clarity, tone, and argument."
+    },
+    {
+      "id": "social_science_analyst",
+      "model_name": "Qwen3-4B-SocialScienceAnalyst",
+      "target_capabilities": ["STRUCTURED_REASONING"],
+      "target_domains": ["SOCIAL_SCIENCE"],
+      "description": "Reason about economics, psychology, policy, and social systems."
+    },
+    {
+      "id": "business_operator",
+      "model_name": "Qwen3-4B-BusinessOperator",
+      "target_capabilities": ["PLANNING", "STRUCTURED_REASONING"],
+      "target_domains": ["BUSINESS_OPERATIONS"],
+      "description": "Plan and analyze business, product, and operational workflows."
+    },
+    {
+      "id": "general_agent",
+      "model_name": "Qwen3-4B-GeneralAgent",
+      "target_capabilities": [],
+      "target_domains": [],
+      "description": "Matched broad control model for agentic and mixed-domain behavior."
+    }
+  ]
+}

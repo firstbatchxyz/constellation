@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from constellation.taxonomy import CapabilityTaxonomy
+from constellation.taxonomy import CapabilityTaxonomy, DomainTaxonomy
 
 CAPABILITY_KEYWORDS: dict[str, tuple[str, ...]] = {
     "DEBUGGING": (
@@ -95,6 +95,25 @@ CAPABILITY_KEYWORDS: dict[str, tuple[str, ...]] = {
         "implementation",
         "modify",
         "change code",
+    ),
+    "COMPOSITION": (
+        "write",
+        "compose",
+        "draft",
+        "essay",
+        "story",
+        "paragraph",
+        "argument",
+        "narrative",
+    ),
+    "REVISION": (
+        "revise",
+        "rewrite",
+        "edit the text",
+        "improve clarity",
+        "tone",
+        "style",
+        "proofread",
     ),
     "STRUCTURED_REASONING": (
         "<think>",
@@ -191,6 +210,39 @@ def label_capability_evidence(
 
 def label_capabilities(*, row: dict[str, Any], text: str) -> list[str]:
     return sorted({evidence.label for evidence in label_capability_evidence(row=row, text=text)})
+
+
+def label_domain_evidence(
+    *,
+    row: dict[str, Any],
+    text: str,
+    taxonomy: DomainTaxonomy | None = None,
+) -> list[LabelEvidence]:
+    taxonomy = taxonomy or DomainTaxonomy.load()
+    evidence: dict[str, LabelEvidence] = {}
+
+    def add(label: str, score: float, source: str, cue: str) -> None:
+        entry = evidence.setdefault(label, LabelEvidence(label=label, score=0.0))
+        entry.score = min(1.0, max(entry.score, score))
+        entry.sources.append(source)
+        entry.cues.append(cue)
+
+    haystack = "\n".join([text, *source_category_values(row)]).lower()
+    for label, cues in taxonomy.cues_by_capability().items():
+        matched = [cue for cue in cues if cue.lower() in haystack]
+        if matched:
+            add(label, min(0.95, 0.45 + 0.10 * len(matched)), "heuristic_keyword", matched[0])
+
+    for raw_value in source_category_values(row):
+        normalized = taxonomy.normalize_label(raw_value)
+        if normalized is not None:
+            add(normalized, 0.75, "source_category_alias", raw_value)
+
+    return sorted(evidence.values(), key=lambda item: (-item.score, item.label))
+
+
+def label_domains(*, row: dict[str, Any], text: str) -> list[str]:
+    return sorted({evidence.label for evidence in label_domain_evidence(row=row, text=text)})
 
 
 def sample_type_for_row(*, row: dict[str, Any], text: str) -> str:

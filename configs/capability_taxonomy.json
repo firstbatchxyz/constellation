@@ -51,6 +51,16 @@
       "positive_cues": ["edit", "patch", "diff", "implementation", "modify", "change code"],
       "source_aliases": ["code_edit", "code_editing", "implementation", "patching"]
     },
+    "COMPOSITION": {
+      "description": "Drafting prose, essays, narratives, explanations, dialogue, arguments, or other written artifacts.",
+      "positive_cues": ["write", "compose", "draft", "essay", "story", "paragraph", "argument", "narrative"],
+      "source_aliases": ["composition", "writing", "creative_writing", "essay_writing", "drafting"]
+    },
+    "REVISION": {
+      "description": "Revising, editing, improving clarity, tone, structure, style, or rhetoric in prose.",
+      "positive_cues": ["revise", "rewrite", "edit the text", "improve clarity", "tone", "style", "proofread"],
+      "source_aliases": ["revision", "rewriting", "editing", "copyediting", "proofreading", "style_editing"]
+    },
     "STRUCTURED_REASONING": {
       "description": "Explicit stepwise reasoning, analysis, derivations, rationale, or structured thinking.",
       "positive_cues": ["think", "thinking", "reasoning", "derive", "analyze"],

@@ -1,14 +1,26 @@
 # Dataset-First Build
 
-The merged dataset should use one shared capability taxonomy across all rollout
-sources, even when source datasets expose different category names or no
-categories at all.
+The merged dataset should use shared taxonomy axes across all rollout sources,
+even when source datasets expose different category names or no categories at
+all.
+
+Use two orthogonal axes:
+
+- `capabilities`: what behavior the trajectory teaches, such as planning,
+  retrieval, composition, revision, debugging, or structured reasoning.
+- `domains`: what subject matter the trajectory covers, such as science,
+  mathematics, humanities, writing, medicine, social science, or software.
+
+This lets us build specialists from intersections. For example, scientific
+reasoning is not just one flag; it is usually `SCIENCE` plus
+`STRUCTURED_REASONING`, and scientific research is `SCIENCE` plus
+`RETRIEVAL_SEARCH`.
 
 ## Labeling Flow
 
 1. Stream or convert each rollout source into canonical JSONL.
 2. Relabel canonical rows with the shared taxonomy.
-3. Inspect label counts and evidence.
+3. Inspect capability and domain label counts/evidence.
 4. Export prompt/ICL labeling jobs for uncertain or high-value rows.
 5. Merge reviewed prompt-label outputs back into canonical metadata.
 6. Optionally export encoder/prototype data for ModernBERT-style scoring.
@@ -52,6 +64,26 @@ Render taxonomy docs for review:
 ```bash
 uv run python -m constellation.cli taxonomy-docs \
   --output '{runs_dir}/taxonomy/capability_taxonomy.md'
+
+uv run python -m constellation.cli taxonomy-docs \
+  --taxonomy configs/domain_taxonomy.json \
+  --output '{runs_dir}/taxonomy/domain_taxonomy.md'
+```
+
+List the first 20 distillation targets:
+
+```bash
+uv run python -m constellation.cli list-specialist-targets
+```
+
+Build one target-specific matched subset:
+
+```bash
+uv run python -m constellation.cli build-subsets \
+  --input '{runs_dir}/labeled/merged.labeled.jsonl' \
+  --output-dir '{runs_dir}/subsets' \
+  --target-id science_reasoner \
+  --max-train-tokens 2000000
 ```
 
 ## Prompt/ICL vs ModernBERT
@@ -69,7 +101,9 @@ use it for encoder-style scoring:
 
 - `text`
 - `labels`
+- `domains`
 - `label_vector`
+- `domain_vector`
 - `taxonomy_version`
 - source metadata
 

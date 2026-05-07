@@ -45,6 +45,32 @@ def canonical_sample(sample_id="sample-1"):
     )
 
 
+def science_sample(sample_id="science-1"):
+    return CanonicalSample(
+        id=sample_id,
+        source_dataset="fixture",
+        sample_type="reasoning",
+        messages=[
+            CanonicalTurn(
+                role="user",
+                type="message",
+                content="Explain the chemistry experiment and reason about the evidence.",
+            ),
+            CanonicalTurn(
+                role="assistant",
+                type="reasoning",
+                content="Analyze the hypothesis, molecule behavior, and experimental evidence.",
+                trainable=True,
+            ),
+        ],
+        capabilities=[],
+        domains=[],
+        success=True,
+        quality_score=0.9,
+        metadata={"category": "science"},
+    )
+
+
 class CategorizationTests(unittest.TestCase):
     def test_taxonomy_normalizes_source_aliases(self):
         taxonomy = CapabilityTaxonomy.load()
@@ -64,6 +90,7 @@ class CategorizationTests(unittest.TestCase):
                 input_path=input_path,
                 output_path=output_path,
                 taxonomy_path=Path("configs/capability_taxonomy.json"),
+                domain_taxonomy_path=Path("configs/domain_taxonomy.json"),
                 min_score=0.45,
             )
             rows = list(iter_jsonl(output_path))
@@ -71,7 +98,9 @@ class CategorizationTests(unittest.TestCase):
             self.assertEqual(summary["written"], 1)
             self.assertIn("DEBUGGING", rows[0]["capabilities"])
             self.assertIn("TERMINAL_WORKFLOW", rows[0]["capabilities"])
+            self.assertIn("CODING_SOFTWARE", rows[0]["domains"])
             self.assertIn("capability_labeling", rows[0]["metadata"])
+            self.assertIn("domain_labeling", rows[0]["metadata"])
             self.assertEqual(
                 rows[0]["metadata"]["capability_labeling"]["taxonomy_version"],
                 "capability-taxonomy-v1",
@@ -90,12 +119,14 @@ class CategorizationTests(unittest.TestCase):
                 input_path=input_path,
                 output_path=output_path,
                 taxonomy_path=Path("configs/capability_taxonomy.json"),
+                domain_taxonomy_path=Path("configs/domain_taxonomy.json"),
             )
             exported = next(iter_jsonl(output_path))
 
             self.assertEqual(summary["written"], 1)
             self.assertEqual(exported["labels"], ["DEBUGGING", "TERMINAL_WORKFLOW"])
             self.assertEqual(len(exported["label_vector"]), len(summary["labels"]))
+            self.assertEqual(len(exported["domain_vector"]), len(summary["domains"]))
             self.assertGreater(sum(exported["label_vector"]), 0)
             json.dumps(exported)
 
@@ -114,6 +145,7 @@ class CategorizationTests(unittest.TestCase):
                 input_path=input_path,
                 output_path=output_path,
                 taxonomy_path=Path("configs/capability_taxonomy.json"),
+                domain_taxonomy_path=Path("configs/domain_taxonomy.json"),
                 examples_path=examples_path,
                 max_examples_per_label=1,
                 max_chars=4000,
@@ -124,8 +156,30 @@ class CategorizationTests(unittest.TestCase):
             self.assertEqual(summary["example_count"], 1)
             self.assertIn("Return strict JSON only", exported["prompt"])
             self.assertIn("DEBUGGING", exported["prompt"])
+            self.assertIn("SCIENCE", exported["prompt"])
+            self.assertIn("domains", exported["prompt"])
             self.assertIn("Example 1 trajectory", exported["prompt"])
             self.assertIn("Trajectory to label", exported["prompt"])
+
+    def test_relabel_jsonl_tracks_science_domain_separately(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            input_path = root / "science.jsonl"
+            output_path = root / "science.labeled.jsonl"
+            write_jsonl(input_path, [science_sample().to_dict()])
+
+            summary = relabel_jsonl(
+                input_path=input_path,
+                output_path=output_path,
+                taxonomy_path=Path("configs/capability_taxonomy.json"),
+                domain_taxonomy_path=Path("configs/domain_taxonomy.json"),
+                min_score=0.45,
+            )
+            row = next(iter_jsonl(output_path))
+
+            self.assertIn("SCIENCE", row["domains"])
+            self.assertIn("STRUCTURED_REASONING", row["capabilities"])
+            self.assertEqual(summary["domain_counts"]["SCIENCE"], 1)
 
 
 if __name__ == "__main__":

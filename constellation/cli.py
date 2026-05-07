@@ -24,6 +24,11 @@ from constellation.parsers import parse_agenttrove_row, parse_hermes_row
 from constellation.schema import CanonicalSample
 from constellation.scoring import with_quality_score
 from constellation.sft import train_sft_from_config
+from constellation.specialists import (
+    DEFAULT_SPECIALIST_TARGETS_PATH,
+    load_specialist_targets,
+    targets_to_dicts,
+)
 from constellation.streaming import DATASET_SOURCES, resolve_source, stream_convert
 from constellation.subsets import build_debugging_pilot_subsets
 
@@ -33,6 +38,9 @@ PARSERS: dict[str, ParserFn] = {
     "agenttrove": parse_agenttrove_row,
     "hermes": parse_hermes_row,
 }
+
+DEFAULT_CAPABILITY_TAXONOMY = Path("configs/capability_taxonomy.json")
+DEFAULT_DOMAIN_TAXONOMY = Path("configs/domain_taxonomy.json")
 
 
 def convert(args: argparse.Namespace) -> int:
@@ -93,10 +101,25 @@ def stream_convert_rows(args: argparse.Namespace) -> int:
 
 
 def build_subsets(args: argparse.Namespace) -> int:
+    target_capabilities = list(args.target_capability or ["DEBUGGING"])
+    target_domains = list(args.target_domain or [])
+    output_prefix = args.output_prefix
+    if args.target_id:
+        targets = {target.id: target for target in load_specialist_targets(args.specialist_targets)}
+        if args.target_id not in targets:
+            raise ValueError(f"unknown specialist target id: {args.target_id}")
+        target = targets[args.target_id]
+        target_capabilities = list(target.target_capabilities)
+        target_domains = list(target.target_domains)
+        output_prefix = output_prefix or target.id
+
     manifest = build_debugging_pilot_subsets(
         inputs=[artifact_path(path) for path in args.input],
         output_dir=artifact_path(args.output_dir),
-        target_capability=args.target_capability,
+        target_capability=target_capabilities[0] if len(target_capabilities) == 1 else "",
+        target_capabilities=target_capabilities,
+        target_domains=target_domains,
+        output_prefix=output_prefix,
         max_train_tokens=args.max_train_tokens,
         specialist_target_ratio=args.specialist_target_ratio,
         eval_fraction=args.eval_fraction,
@@ -127,6 +150,7 @@ def relabel_capabilities(args: argparse.Namespace) -> int:
         input_path=artifact_path(args.input),
         output_path=artifact_path(args.output),
         taxonomy_path=args.taxonomy,
+        domain_taxonomy_path=args.domain_taxonomy,
         min_score=args.min_score,
         max_chars=args.max_chars,
     )
@@ -139,6 +163,7 @@ def export_classifier(args: argparse.Namespace) -> int:
         input_path=artifact_path(args.input),
         output_path=artifact_path(args.output),
         taxonomy_path=args.taxonomy,
+        domain_taxonomy_path=args.domain_taxonomy,
         min_score=args.min_score,
         max_chars=args.max_chars,
         include_unlabeled=args.include_unlabeled,
@@ -152,6 +177,7 @@ def export_labeling_prompts(args: argparse.Namespace) -> int:
         input_path=artifact_path(args.input),
         output_path=artifact_path(args.output),
         taxonomy_path=args.taxonomy,
+        domain_taxonomy_path=args.domain_taxonomy,
         examples_path=artifact_path(args.examples) if args.examples else None,
         max_examples_per_label=args.max_examples_per_label,
         max_chars=args.max_chars,
@@ -163,6 +189,20 @@ def export_labeling_prompts(args: argparse.Namespace) -> int:
 def taxonomy_docs(args: argparse.Namespace) -> int:
     summary = write_taxonomy_markdown(args.taxonomy, artifact_path(args.output))
     print(json.dumps(summary, indent=2))
+    return 0
+
+
+def list_specialist_targets(args: argparse.Namespace) -> int:
+    targets = load_specialist_targets(args.specialist_targets)
+    print(
+        json.dumps(
+            {
+                "specialist_targets": targets_to_dicts(targets),
+                "count": len(targets),
+            },
+            indent=2,
+        )
+    )
     return 0
 
 
@@ -216,7 +256,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subsets_cmd.add_argument("--input", type=Path, nargs="+", required=True)
     subsets_cmd.add_argument("--output-dir", type=Path, required=True)
-    subsets_cmd.add_argument("--target-capability", default="DEBUGGING")
+    subsets_cmd.add_argument("--target-id")
+    subsets_cmd.add_argument("--specialist-targets", type=Path, default=DEFAULT_SPECIALIST_TARGETS_PATH)
+    subsets_cmd.add_argument("--target-capability", action="append")
+    subsets_cmd.add_argument("--target-domain", action="append", default=[])
+    subsets_cmd.add_argument("--output-prefix")
     subsets_cmd.add_argument("--max-train-tokens", type=int, default=2_000_000)
     subsets_cmd.add_argument("--specialist-target-ratio", type=float, default=0.8)
     subsets_cmd.add_argument("--eval-fraction", type=float, default=0.1)
@@ -237,11 +281,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     relabel_cmd = subcommands.add_parser(
         "relabel-capabilities",
-        help="rewrite canonical JSONL with normalized taxonomy labels and evidence",
+        help="rewrite canonical JSONL with normalized capability/domain labels and evidence",
     )
     relabel_cmd.add_argument("--input", type=Path, required=True)
     relabel_cmd.add_argument("--output", type=Path, required=True)
-    relabel_cmd.add_argument("--taxonomy", type=Path, default=Path("configs/capability_taxonomy.json"))
+    relabel_cmd.add_argument("--taxonomy", type=Path, default=DEFAULT_CAPABILITY_TAXONOMY)
+    relabel_cmd.add_argument("--domain-taxonomy", type=Path, default=DEFAULT_DOMAIN_TAXONOMY)
     relabel_cmd.add_argument("--min-score", type=float, default=0.45)
     relabel_cmd.add_argument("--max-chars", type=int, default=24000)
     relabel_cmd.set_defaults(func=relabel_capabilities)
@@ -252,7 +297,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     export_cmd.add_argument("--input", type=Path, required=True)
     export_cmd.add_argument("--output", type=Path, required=True)
-    export_cmd.add_argument("--taxonomy", type=Path, default=Path("configs/capability_taxonomy.json"))
+    export_cmd.add_argument("--taxonomy", type=Path, default=DEFAULT_CAPABILITY_TAXONOMY)
+    export_cmd.add_argument("--domain-taxonomy", type=Path, default=DEFAULT_DOMAIN_TAXONOMY)
     export_cmd.add_argument("--min-score", type=float, default=0.45)
     export_cmd.add_argument("--max-chars", type=int, default=24000)
     export_cmd.add_argument("--include-unlabeled", action="store_true")
@@ -260,11 +306,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     prompt_cmd = subcommands.add_parser(
         "export-labeling-prompts",
-        help="export prompt/ICL JSONL for generative rollout capability labeling",
+        help="export prompt/ICL JSONL for generative rollout capability/domain labeling",
     )
     prompt_cmd.add_argument("--input", type=Path, required=True)
     prompt_cmd.add_argument("--output", type=Path, required=True)
-    prompt_cmd.add_argument("--taxonomy", type=Path, default=Path("configs/capability_taxonomy.json"))
+    prompt_cmd.add_argument("--taxonomy", type=Path, default=DEFAULT_CAPABILITY_TAXONOMY)
+    prompt_cmd.add_argument("--domain-taxonomy", type=Path, default=DEFAULT_DOMAIN_TAXONOMY)
     prompt_cmd.add_argument("--examples", type=Path)
     prompt_cmd.add_argument("--max-examples-per-label", type=int, default=2)
     prompt_cmd.add_argument("--max-chars", type=int, default=12000)
@@ -272,11 +319,22 @@ def build_parser() -> argparse.ArgumentParser:
 
     taxonomy_cmd = subcommands.add_parser(
         "taxonomy-docs",
-        help="render the capability taxonomy to Markdown for review",
+        help="render a taxonomy JSON file to Markdown for review",
     )
-    taxonomy_cmd.add_argument("--taxonomy", type=Path, default=Path("configs/capability_taxonomy.json"))
+    taxonomy_cmd.add_argument("--taxonomy", type=Path, default=DEFAULT_CAPABILITY_TAXONOMY)
     taxonomy_cmd.add_argument("--output", type=Path, required=True)
     taxonomy_cmd.set_defaults(func=taxonomy_docs)
+
+    targets_cmd = subcommands.add_parser(
+        "list-specialist-targets",
+        help="list configured distillation targets",
+    )
+    targets_cmd.add_argument(
+        "--specialist-targets",
+        type=Path,
+        default=DEFAULT_SPECIALIST_TARGETS_PATH,
+    )
+    targets_cmd.set_defaults(func=list_specialist_targets)
 
     return root
 

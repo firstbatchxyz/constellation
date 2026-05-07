@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from constellation.labeling import label_capabilities
+from constellation.labeling import label_capabilities, label_domains
 from constellation.parsers.common import (
     normalize_role,
     split_assistant_content,
@@ -54,6 +54,7 @@ def parse_hermes_row(
         sample_type="agent",
         messages=turns,
         capabilities=label_capabilities(row=row, text=text),
+        domains=label_domains(row=row, text=text),
         success=None,
         metadata=metadata,
     )

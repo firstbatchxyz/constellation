@@ -8,7 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-DEFAULT_TAXONOMY_PATH = Path("configs/capability_taxonomy.json")
+DEFAULT_CAPABILITY_TAXONOMY_PATH = Path("configs/capability_taxonomy.json")
+DEFAULT_DOMAIN_TAXONOMY_PATH = Path("configs/domain_taxonomy.json")
 
 
 def normalize_label_text(value: str) -> str:
@@ -64,7 +65,7 @@ class CapabilityTaxonomy:
         return cls(version=str(value.get("version", "capability-taxonomy-v1")), capabilities=capabilities)
 
     @classmethod
-    def load(cls, path: str | Path = DEFAULT_TAXONOMY_PATH) -> "CapabilityTaxonomy":
+    def load(cls, path: str | Path = DEFAULT_CAPABILITY_TAXONOMY_PATH) -> "CapabilityTaxonomy":
         with Path(path).open("r", encoding="utf-8") as handle:
             return cls.from_dict(json.load(handle))
 
@@ -77,3 +78,26 @@ class CapabilityTaxonomy:
 
     def cues_by_capability(self) -> dict[str, tuple[str, ...]]:
         return {capability.name: capability.positive_cues for capability in self.capabilities}
+
+
+class DomainTaxonomy(CapabilityTaxonomy):
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "DomainTaxonomy":
+        raw_domains = value.get("domains")
+        if not isinstance(raw_domains, dict):
+            raise ValueError("domain taxonomy must contain a domains object")
+        capabilities = [
+            CapabilityDefinition(
+                name=str(name),
+                description=str(definition.get("description", "")),
+                positive_cues=tuple(definition.get("positive_cues") or ()),
+                source_aliases=tuple(definition.get("source_aliases") or ()),
+            )
+            for name, definition in raw_domains.items()
+        ]
+        return cls(version=str(value.get("version", "domain-taxonomy-v1")), capabilities=capabilities)
+
+    @classmethod
+    def load(cls, path: str | Path = DEFAULT_DOMAIN_TAXONOMY_PATH) -> "DomainTaxonomy":
+        with Path(path).open("r", encoding="utf-8") as handle:
+            return cls.from_dict(json.load(handle))

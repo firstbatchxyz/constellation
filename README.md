@@ -53,11 +53,17 @@ fixtures only.
 
 ## Dataset Labeling
 
-All rollout sources should be normalized into the shared capability taxonomy in
-[configs/capability_taxonomy.json](configs/capability_taxonomy.json). Use
-[docs/DATASET.md](docs/DATASET.md) for the dataset-first relabeling and
-prompt/ICL labeling flow. ModernBERT can still be useful as an encoder scorer,
-but not as a decoder-style prompt model that emits labels.
+All rollout sources should be normalized into shared capability and domain
+taxonomies:
+
+- [configs/capability_taxonomy.json](configs/capability_taxonomy.json)
+- [configs/domain_taxonomy.json](configs/domain_taxonomy.json)
+
+Use [docs/DATASET.md](docs/DATASET.md) for the dataset-first relabeling and
+prompt/ICL labeling flow. The first distillation registry supports up to 20
+specialists in [configs/specialist_targets.json](configs/specialist_targets.json).
+ModernBERT can still be useful as an encoder scorer, but not as a decoder-style
+prompt model that emits labels.
 
 ## Core Training Rule
 

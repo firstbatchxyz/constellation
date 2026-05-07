@@ -67,6 +67,7 @@ class CanonicalSample:
     sample_type: str
     messages: list[CanonicalTurn]
     capabilities: list[str] = field(default_factory=list)
+    domains: list[str] = field(default_factory=list)
     success: bool | None = None
     quality_score: float = 0.0
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -90,6 +91,7 @@ class CanonicalSample:
             "sample_type": self.sample_type,
             "messages": [turn.to_dict() for turn in self.messages],
             "capabilities": self.capabilities,
+            "domains": self.domains,
             "success": self.success,
             "quality_score": self.quality_score,
             "metadata": self.metadata,
@@ -103,6 +105,7 @@ class CanonicalSample:
             sample_type=value["sample_type"],
             messages=[CanonicalTurn.from_dict(item) for item in value.get("messages", [])],
             capabilities=list(value.get("capabilities") or []),
+            domains=list(value.get("domains") or []),
             success=value.get("success"),
             quality_score=float(value.get("quality_score", 0.0)),
             metadata=dict(value.get("metadata") or {}),

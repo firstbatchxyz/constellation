@@ -18,7 +18,14 @@ class FakeTokenizer:
         return {"input_ids": [ord(char) for char in text]}
 
 
-def sample(sample_id, capabilities, quality=0.9, source="fixture", original_id=None):
+def sample(
+    sample_id,
+    capabilities,
+    domains=None,
+    quality=0.9,
+    source="fixture",
+    original_id=None,
+):
     return CanonicalSample(
         id=sample_id,
         source_dataset=source,
@@ -50,6 +57,7 @@ def sample(sample_id, capabilities, quality=0.9, source="fixture", original_id=N
             ),
         ],
         capabilities=capabilities,
+        domains=domains or [],
         success=True,
         quality_score=quality,
         metadata={"original_id": original_id or sample_id},
@@ -105,6 +113,48 @@ class PilotPipelineTests(unittest.TestCase):
                 [row["id"] for row in first_train],
                 [row["id"] for row in second_train],
             )
+
+    def test_build_domain_capability_target_subsets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            input_path = root / "canonical.jsonl"
+            rows = [
+                sample(
+                    "science-1",
+                    ["STRUCTURED_REASONING"],
+                    domains=["SCIENCE"],
+                ).to_dict(),
+                sample(
+                    "science-2",
+                    ["STRUCTURED_REASONING"],
+                    domains=["SCIENCE"],
+                ).to_dict(),
+                sample(
+                    "writing-1",
+                    ["COMPOSITION"],
+                    domains=["WRITING"],
+                ).to_dict(),
+            ]
+            write_jsonl(input_path, rows)
+
+            manifest = build_debugging_pilot_subsets(
+                inputs=[input_path],
+                output_dir=root / "science",
+                target_capability="",
+                target_capabilities=["STRUCTURED_REASONING"],
+                target_domains=["SCIENCE"],
+                output_prefix="science_reasoner",
+                max_train_tokens=10000,
+                eval_fraction=0.5,
+                eval_max_samples=1,
+                min_tokens=1,
+                seed="fixture",
+            )
+            train_rows = list(iter_jsonl(root / "science" / "science_reasoner.train.jsonl"))
+
+            self.assertEqual(manifest["target_capabilities"], ["STRUCTURED_REASONING"])
+            self.assertEqual(manifest["target_domains"], ["SCIENCE"])
+            self.assertTrue(all("SCIENCE" in row["domains"] for row in train_rows[:1]))
 
     def test_eval_metrics_detect_tool_call_and_observation_overlap(self):
         canonical = sample("b", ["DEBUGGING", "TOOL_USE"])

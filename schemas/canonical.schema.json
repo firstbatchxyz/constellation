@@ -41,6 +41,11 @@
       "items": { "type": "string" },
       "uniqueItems": true
     },
+    "domains": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
     "success": { "type": ["boolean", "null"] },
     "quality_score": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
     "metadata": { "type": "object" }

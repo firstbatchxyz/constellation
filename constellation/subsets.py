@@ -83,11 +83,44 @@ def write_samples(path: Path, samples: list[CanonicalSample]) -> int:
     return write_jsonl(path, (sample.to_dict() for sample in samples))
 
 
+def safe_name(value: str) -> str:
+    return value.lower().replace("/", "_").replace(" ", "_")
+
+
+def default_output_prefix(target_capabilities: list[str], target_domains: list[str]) -> str:
+    if target_capabilities == ["DEBUGGING"] and not target_domains:
+        return "debugging"
+    parts = [safe_name(item) for item in target_domains + target_capabilities]
+    return "_".join(parts) if parts else "general_agent"
+
+
+def sample_matches_target(
+    sample: CanonicalSample,
+    *,
+    target_capabilities: list[str],
+    target_domains: list[str],
+) -> bool:
+    capability_match = (
+        all(capability in sample.capabilities for capability in target_capabilities)
+        if target_capabilities
+        else True
+    )
+    domain_match = (
+        any(domain in sample.domains for domain in target_domains)
+        if target_domains
+        else True
+    )
+    return capability_match and domain_match
+
+
 def build_debugging_pilot_subsets(
     *,
     inputs: list[Path],
     output_dir: Path,
     target_capability: str = "DEBUGGING",
+    target_capabilities: list[str] | None = None,
+    target_domains: list[str] | None = None,
+    output_prefix: str | None = None,
     max_train_tokens: int = 2_000_000,
     specialist_target_ratio: float = 0.8,
     eval_fraction: float = 0.1,
@@ -102,6 +135,10 @@ def build_debugging_pilot_subsets(
     if not 0.0 < eval_fraction < 1.0:
         raise ValueError("eval_fraction must be in (0, 1)")
 
+    resolved_capabilities = target_capabilities or ([target_capability] if target_capability else [])
+    resolved_domains = target_domains or []
+    prefix = output_prefix or default_output_prefix(resolved_capabilities, resolved_domains)
+
     output_dir.mkdir(parents=True, exist_ok=True)
 
     samples = [
@@ -111,7 +148,15 @@ def build_debugging_pilot_subsets(
         and passes_basic_filters(sample, min_tokens=min_tokens, max_tokens=max_tokens)
     ]
 
-    target_samples = [sample for sample in samples if target_capability in sample.capabilities]
+    target_samples = [
+        sample
+        for sample in samples
+        if sample_matches_target(
+            sample,
+            target_capabilities=resolved_capabilities,
+            target_domains=resolved_domains,
+        )
+    ]
     eval_groups = {
         group_key(sample)
         for sample in target_samples
@@ -131,8 +176,24 @@ def build_debugging_pilot_subsets(
 
     eval_group_keys = {group_key(sample) for sample in eval_samples}
     train_pool = [sample for sample in samples if group_key(sample) not in eval_group_keys]
-    target_pool = [sample for sample in train_pool if target_capability in sample.capabilities]
-    anchor_pool = [sample for sample in train_pool if target_capability not in sample.capabilities]
+    target_pool = [
+        sample
+        for sample in train_pool
+        if sample_matches_target(
+            sample,
+            target_capabilities=resolved_capabilities,
+            target_domains=resolved_domains,
+        )
+    ]
+    anchor_pool = [
+        sample
+        for sample in train_pool
+        if not sample_matches_target(
+            sample,
+            target_capabilities=resolved_capabilities,
+            target_domains=resolved_domains,
+        )
+    ]
 
     target_budget = int(max_train_tokens * specialist_target_ratio)
     anchor_budget = max_train_tokens - target_budget
@@ -156,32 +217,40 @@ def build_debugging_pilot_subsets(
     )
 
     paths = {
-        "debugging_specialist_train": output_dir / "debugging_specialist.train.jsonl",
-        "general_agentic_mix_train": output_dir / "general_agentic_mix.train.jsonl",
-        "debugging_eval": output_dir / "debugging.eval.jsonl",
-        "manifest": output_dir / "manifest.json",
+        "specialist_train": output_dir / f"{prefix}.train.jsonl",
+        "general_agentic_mix_train": output_dir / f"general_agentic_mix.{prefix}.train.jsonl",
+        "target_eval": output_dir / f"{prefix}.eval.jsonl",
+        "manifest": output_dir / f"{prefix}.manifest.json",
     }
+    if prefix == "debugging" and resolved_capabilities == ["DEBUGGING"] and not resolved_domains:
+        paths = {
+            "specialist_train": output_dir / "debugging_specialist.train.jsonl",
+            "general_agentic_mix_train": output_dir / "general_agentic_mix.train.jsonl",
+            "target_eval": output_dir / "debugging.eval.jsonl",
+            "manifest": output_dir / "manifest.json",
+        }
 
     counts = {
-        "debugging_specialist_train": write_samples(
-            paths["debugging_specialist_train"], specialist_samples
-        ),
+        "specialist_train": write_samples(paths["specialist_train"], specialist_samples),
         "general_agentic_mix_train": write_samples(
             paths["general_agentic_mix_train"], general_selection.samples
         ),
-        "debugging_eval": write_samples(paths["debugging_eval"], eval_samples),
+        "target_eval": write_samples(paths["target_eval"], eval_samples),
     }
 
     manifest = {
         "target_capability": target_capability,
+        "target_capabilities": resolved_capabilities,
+        "target_domains": resolved_domains,
+        "output_prefix": prefix,
         "seed": seed,
         "inputs": [str(path) for path in inputs],
         "paths": {key: str(value) for key, value in paths.items()},
         "counts": counts,
         "tokens": {
-            "debugging_specialist_train": specialist_tokens,
+            "specialist_train": specialist_tokens,
             "general_agentic_mix_train": general_selection.tokens,
-            "debugging_eval": sum(token_count_estimate(sample) for sample in eval_samples),
+            "target_eval": sum(token_count_estimate(sample) for sample in eval_samples),
         },
         "selection": {
             "max_train_tokens": max_train_tokens,

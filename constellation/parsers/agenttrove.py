@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from constellation.labeling import label_capabilities, sample_type_for_row
+from constellation.labeling import label_capabilities, label_domains, sample_type_for_row
 from constellation.parsers.common import (
     normalize_role,
     parse_success,
@@ -62,6 +62,7 @@ def parse_agenttrove_row(
 
     text = "\n".join(turn.content for turn in turns)
     capabilities = label_capabilities(row=row, text=text)
+    domains = label_domains(row=row, text=text)
 
     return CanonicalSample(
         id=sample_id,
@@ -69,6 +70,7 @@ def parse_agenttrove_row(
         sample_type=sample_type_for_row(row=row, text=text),
         messages=turns,
         capabilities=capabilities,
+        domains=domains,
         success=parse_success(
             row["reward"]
             if "reward" in row
