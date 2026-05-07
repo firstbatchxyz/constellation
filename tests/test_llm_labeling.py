@@ -387,6 +387,36 @@ class LLMLabelingTests(unittest.TestCase):
         self.assertEqual(guarded["domains"], ["MEDICINE_HEALTH"])
         self.assertEqual(guarded["metadata"]["added_capabilities"], ["TOOL_USE"])
 
+    def test_label_guardrails_fill_todo_blocker_planning(self):
+        todo_planning = CanonicalSample(
+            id="95964889-66a6-484f-af09-ac91da7a2a00",
+            source_dataset="lambda/hermes-agent-reasoning-traces:kimi",
+            sample_type="agent",
+            messages=[
+                CanonicalTurn(
+                    role="user",
+                    type="message",
+                    content=(
+                        "Review my current todos. Which ones are blocked? "
+                        "Identify blockers and create sub-tasks to resolve them."
+                    ),
+                )
+            ],
+            quality_score=1.0,
+        )
+
+        guarded = apply_label_guardrails(
+            todo_planning,
+            capabilities=[],
+            domains=[],
+            max_capabilities=4,
+            max_domains=2,
+        )
+
+        self.assertEqual(guarded["capabilities"], ["PLANNING"])
+        self.assertEqual(guarded["domains"], ["BUSINESS_OPERATIONS"])
+        self.assertEqual(guarded["metadata"]["added_capabilities"], ["PLANNING"])
+
     def test_llm_label_jsonl_accepts_fake_generator(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path = Path(tmpdir) / "in.jsonl"
