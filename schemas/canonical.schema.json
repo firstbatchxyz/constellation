@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Constellation Canonical Sample",
+  "type": "object",
+  "required": [
+    "id",
+    "source_dataset",
+    "sample_type",
+    "messages",
+    "capabilities",
+    "success",
+    "quality_score",
+    "metadata"
+  ],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "source_dataset": { "type": "string", "minLength": 1 },
+    "sample_type": { "type": "string", "enum": ["reasoning", "agent", "coding"] },
+    "messages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["role", "type", "content", "trainable"],
+        "properties": {
+          "role": { "type": "string", "enum": ["system", "user", "assistant", "tool"] },
+          "type": {
+            "type": "string",
+            "enum": ["message", "reasoning", "tool_call", "observation", "final"]
+          },
+          "content": { "type": "string" },
+          "trainable": { "type": "boolean" },
+          "name": { "type": "string" },
+          "metadata": { "type": "object" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "success": { "type": ["boolean", "null"] },
+    "quality_score": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+    "metadata": { "type": "object" }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,21 @@
+[project]
+name = "constellation"
+version = "0.1.0"
+description = "Capability-distilled specialist network data pipeline."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+
+[project.scripts]
+constellation = "constellation.cli:main"
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

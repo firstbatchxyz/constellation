@@ -1,0 +1,20 @@
+{
+  "capabilities": [
+    "DEBUGGING",
+    "ERROR_RECOVERY",
+    "TERMINAL_WORKFLOW",
+    "TOOL_USE",
+    "CODEBASE_NAVIGATION",
+    "MULTI_FILE_EDITING",
+    "TEST_WRITING",
+    "PLANNING",
+    "RETRIEVAL_SEARCH",
+    "CODE_EDITING",
+    "STRUCTURED_REASONING"
+  ],
+  "notes": [
+    "Use multi-label assignment.",
+    "Do not split by programming language or framework.",
+    "Create matched general-agent and specialist subsets for every comparison."
+  ]
+}
