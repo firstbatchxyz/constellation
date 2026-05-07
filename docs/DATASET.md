@@ -112,6 +112,36 @@ removed so SGLang falls back to default kernels:
 uv pip uninstall -y deep-gemm deep_gemm
 ```
 
+If `uv pip uninstall` says no package is installed but SGLang still imports
+`site-packages/deep_gemm`, quarantine the import folder directly:
+
+```bash
+uv run python - <<'PY'
+import pathlib
+import sysconfig
+
+site = pathlib.Path(sysconfig.get_paths()["purelib"])
+paths = sorted(site.glob("*deep*gemm*"))
+print("site-packages:", site)
+for path in paths:
+    print(path)
+PY
+
+uv run python - <<'PY'
+import pathlib
+import sysconfig
+
+site = pathlib.Path(sysconfig.get_paths()["purelib"])
+for name in ("deep_gemm", "deep_gemm_disabled"):
+    print(name, (site / name).exists())
+source = site / "deep_gemm"
+target = site / "deep_gemm.disabled"
+if source.exists() and not target.exists():
+    source.rename(target)
+    print("renamed", source, "->", target)
+PY
+```
+
 Then start SGLang:
 
 ```bash
