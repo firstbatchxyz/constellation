@@ -19,6 +19,13 @@ from constellation.taxonomy import CapabilityTaxonomy, DomainTaxonomy
 DEFAULT_LLM_LABEL_MODEL = "Qwen/Qwen3.5-0.8B"
 LLM_LABEL_METHOD = "llm_json_v2"
 
+CODING_FRAME_CUES: tuple[str, ...] = (
+    "competitive programming problem",
+    "contest information",
+    "sample input",
+    "sample output",
+)
+
 DOMAIN_GUARDRAIL_CUES: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
         "CODING_SOFTWARE",
@@ -43,7 +50,21 @@ DOMAIN_GUARDRAIL_CUES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ),
     (
         "MEDICINE_HEALTH",
-        ("patient", "clinical", "diagnosis", "differential diagnosis", "symptom", "fever", "cough", "oxygen saturation", "pneumonia"),
+        (
+            "patient with",
+            "clinical",
+            "diagnosis",
+            "differential diagnosis",
+            "symptom",
+            "fever",
+            "cough",
+            "oxygen saturation",
+            "pneumonia",
+            "treatment",
+            "physiology",
+            "biomedical",
+            "medical text",
+        ),
     ),
     (
         "DATA_ANALYSIS",
@@ -88,8 +109,21 @@ REQUIRED_CAPABILITY_CUES: dict[str, tuple[str, ...]] = {
     "CODE_EDITING": ("patch", "modify code", "implementation", "refactor", "diff", "fix the implementation"),
     "MULTI_FILE_EDITING": ("multi-file", "multiple files", "across files", "refactor"),
     "TEST_WRITING": ("unit test", "pytest", "jest", "vitest", "test runner", "coverage", "failing test", "write tests", "add tests", "fixture", "assertion"),
-    "TERMINAL_WORKFLOW": ("shell", "terminal", "command", "cli", "uv run", "bash", "python3 -m", "npm", "cargo"),
-    "TOOL_USE": ("tool_call", "function call", "tool response", "observation", "browser", "api call"),
+    "TERMINAL_WORKFLOW": (
+        "shell",
+        "terminal",
+        "command",
+        "cli",
+        "uv run",
+        "bash",
+        "python3 -m",
+        "npm",
+        "cargo",
+        "axolotl",
+        "configure fine-tuning",
+        "fine-tuning pipeline",
+    ),
+    "TOOL_USE": ("tool_call", "function call", "tool response", "observation", "browser", "api call", "axolotl"),
     "RETRIEVAL_SEARCH": ("search", "literature", "sources", "cite", "lookup", "retrieve", "documentation"),
     "COMPOSITION": ("compose", "draft", "write an essay", "personal essay", "story", "narrative"),
     "REVISION": ("revise", "rewrite", "improve clarity", "tone", "style", "proofread", "edit the text"),
@@ -115,6 +149,14 @@ ADD_CAPABILITY_CUES: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
         "PLANNING",
         ("plan", "rollout plan", "phases", "owners", "risks", "cadence", "design a survey", "define treatment", "success metrics"),
+    ),
+    (
+        "TERMINAL_WORKFLOW",
+        ("axolotl", "configure fine-tuning", "fine-tuning pipeline"),
+    ),
+    (
+        "TOOL_USE",
+        ("axolotl", "tool_call", "function call", "tool response", "observation"),
     ),
     (
         "DEBUGGING",
@@ -262,6 +304,10 @@ def contains_any(text: str, cues: tuple[str, ...]) -> bool:
     return any(cue in text for cue in cues)
 
 
+def has_coding_frame(sample: CanonicalSample, text: str) -> bool:
+    return sample.sample_type == "coding" or contains_any(text, CODING_FRAME_CUES)
+
+
 def normalize_taxonomy_labels(
     labels: list[str],
     taxonomy: CapabilityTaxonomy,
@@ -290,12 +336,16 @@ def apply_label_guardrails(
     max_domains: int,
 ) -> dict[str, Any]:
     text = task_focused_text(sample, max_chars=24000).lower()
-    matched_domains = [
-        domain
-        for domain, cues in DOMAIN_GUARDRAIL_CUES
-        if contains_any(text, cues)
-    ]
-    final_domains = matched_domains[:max_domains] if matched_domains else list(domains)
+    coding_frame = has_coding_frame(sample, text)
+    if coding_frame:
+        final_domains = ["CODING_SOFTWARE"]
+    else:
+        matched_domains = [
+            domain
+            for domain, cues in DOMAIN_GUARDRAIL_CUES
+            if contains_any(text, cues)
+        ]
+        final_domains = matched_domains[:max_domains] if matched_domains else list(domains)
 
     final_capabilities: list[str] = []
     dropped_capabilities: list[str] = []
@@ -331,6 +381,7 @@ def apply_label_guardrails(
             "added_capabilities": added_capabilities,
             "model_domains": domains,
             "guardrail_domains": final_domains,
+            "coding_frame": coding_frame,
         },
     }
 

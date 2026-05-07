@@ -267,6 +267,70 @@ class LLMLabelingTests(unittest.TestCase):
         )
         self.assertEqual(guarded["domains"], ["CODING_SOFTWARE"])
 
+    def test_label_guardrails_ignore_story_domain_words_in_coding_samples(self):
+        coding = CanonicalSample(
+            id="code_contests-0700__xfaEGuJ",
+            source_dataset="open-thoughts/AgentTrove",
+            sample_type="coding",
+            messages=[
+                CanonicalTurn(
+                    role="user",
+                    type="message",
+                    content=(
+                        "Task Description:\n# tablets\n\n## Problem Description\n"
+                        "Therasa is a Nurse. She wants to give some tablets to the patients "
+                        "in her practice. All the patients sit in a line and each of them has "
+                        "a rating score according to his or her health score.\n\n"
+                        "SAMPLE INPUT\n3\n1\n2\n2\n\nSAMPLE OUTPUT\n4\n\n"
+                        "Solve this competitive programming problem. Provide a complete implementation."
+                    ),
+                )
+            ],
+            quality_score=1.0,
+        )
+
+        guarded = apply_label_guardrails(
+            coding,
+            capabilities=["CODE_EDITING", "PLANNING"],
+            domains=["CODING_SOFTWARE"],
+            max_capabilities=4,
+            max_domains=2,
+        )
+
+        self.assertEqual(guarded["capabilities"], ["CODE_EDITING", "PLANNING"])
+        self.assertEqual(guarded["domains"], ["CODING_SOFTWARE"])
+        self.assertTrue(guarded["metadata"]["coding_frame"])
+
+    def test_label_guardrails_keep_axolotl_medical_tooling(self):
+        medical_tooling = CanonicalSample(
+            id="45f4a0e4-f15f-44e5-b306-708692434213",
+            source_dataset="lambda/hermes-agent-reasoning-traces:glm-5.1",
+            sample_type="agent",
+            messages=[
+                CanonicalTurn(
+                    role="user",
+                    type="message",
+                    content=(
+                        "Use the axolotl skill to configure fine-tuning for "
+                        "domain-specific fine-tuning for medical text."
+                    ),
+                )
+            ],
+            quality_score=1.0,
+        )
+
+        guarded = apply_label_guardrails(
+            medical_tooling,
+            capabilities=["TERMINAL_WORKFLOW"],
+            domains=["MEDICINE_HEALTH"],
+            max_capabilities=4,
+            max_domains=2,
+        )
+
+        self.assertEqual(guarded["capabilities"], ["TERMINAL_WORKFLOW", "TOOL_USE"])
+        self.assertEqual(guarded["domains"], ["MEDICINE_HEALTH"])
+        self.assertEqual(guarded["metadata"]["added_capabilities"], ["TOOL_USE"])
+
     def test_llm_label_jsonl_accepts_fake_generator(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             input_path = Path(tmpdir) / "in.jsonl"
