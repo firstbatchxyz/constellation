@@ -12,7 +12,8 @@ from constellation.io import iter_jsonl, write_jsonl
 from constellation.schema import CanonicalSample
 from constellation.taxonomy import CapabilityTaxonomy, DomainTaxonomy
 
-DEFAULT_LLM_LABEL_MODEL = "Qwen/Qwen3-0.6B"
+DEFAULT_LLM_LABEL_MODEL = "Qwen/Qwen3.5-0.8B"
+LLM_LABEL_METHOD = "llm_json_v2"
 
 
 class OptionalLLMLabelingDependencyError(RuntimeError):
@@ -36,8 +37,10 @@ def build_llm_label_prompt(
     text = task_focused_text(sample, max_chars=max_chars)
     return "\n".join(
         [
-            "You label rollout trajectories for specialist model distillation.",
+            "You label ONE task trajectory for specialist model distillation.",
             "Return one strict JSON object and no surrounding prose.",
+            "Ignore the order of labels in the taxonomy; it is not a prior.",
+            "Do not default to CODING_SOFTWARE. Use CODING_SOFTWARE only when the task explicitly involves code, repositories, shell commands, tests, package managers, or developer tooling.",
             "",
             taxonomy_block(capability_taxonomy, title="Capability taxonomy"),
             "",
@@ -49,12 +52,37 @@ def build_llm_label_prompt(
             "Rules:",
             "- Multi-label both axes, but prefer a small precise set over broad coverage.",
             "- Capabilities describe behavior being taught; domains describe subject matter.",
+            "- Decide domains from the user's task topic, not from the fact this is a dataset or distillation pipeline.",
             "- Use exact labels from the taxonomies only.",
             "- Use [] when no label clearly applies on an axis.",
+            "- STRUCTURED_REASONING applies to proofs, causal explanations, differential diagnosis, evidence analysis, study design, quantitative reasoning, and stepwise argumentation.",
             "- COMPOSITION/REVISION require writing or editing prose as the task, not merely prose in the answer.",
             "- TERMINAL_WORKFLOW requires shell/CLI interaction to be central, not just incidental code.",
+            "- TEST_WRITING requires software tests, not a school exam, medical test, survey test, or scientific experiment.",
             "- Scientific specialists should usually be SCIENCE plus a behavioral capability such as STRUCTURED_REASONING.",
             "- Do not infer programming language or framework labels; those are intentionally absent.",
+            "",
+            "Domain guardrails:",
+            "- Patient symptoms, diagnosis, treatment, physiology, or biomedical content => MEDICINE_HEALTH, not CODING_SOFTWARE.",
+            "- CSVs, cohorts, metrics, statistics, charts, or empirical datasets => DATA_ANALYSIS; add BUSINESS_OPERATIONS only when the task is about business operations or customers.",
+            "- Surveys, policy, economics, psychology, sociology, education, politics, or causal social systems => SOCIAL_SCIENCE.",
+            "- History, literature, philosophy, religion, culture, or art interpretation => HUMANITIES.",
+            "- Drafting, revising, style, rhetoric, essays, or prose quality => WRITING.",
+            "- Physics, chemistry, biology, climate, experiments, mechanisms, or natural evidence => SCIENCE.",
+            "- Algebra, proof, geometry, equations, or formal derivation => MATHEMATICS.",
+            "- Broad factual explanation with no specialized domain => GENERAL_KNOWLEDGE.",
+            "",
+            "Calibration examples:",
+            'Task: "Explain why a candle flame goes out under a jar using oxygen and combustion evidence."',
+            'Output: {"capabilities":["STRUCTURED_REASONING"],"domains":["SCIENCE"],"confidence":0.9,"rationale":"causal scientific explanation"}',
+            'Task: "Build a differential diagnosis from fever, cough, chest pain, and oxygen saturation."',
+            'Output: {"capabilities":["STRUCTURED_REASONING"],"domains":["MEDICINE_HEALTH"],"confidence":0.9,"rationale":"clinical reasoning"}',
+            'Task: "Analyze subscription cohort retention from a CSV and choose a chart."',
+            'Output: {"capabilities":["STRUCTURED_REASONING"],"domains":["DATA_ANALYSIS","BUSINESS_OPERATIONS"],"confidence":0.9,"rationale":"metrics and cohort analysis"}',
+            'Task: "Create a rollout plan with owners, metrics, risks, and weekly cadence."',
+            'Output: {"capabilities":["PLANNING"],"domains":["BUSINESS_OPERATIONS"],"confidence":0.9,"rationale":"operational planning"}',
+            'Task: "Debug a Python repo, inspect traceback, patch code, and rerun tests."',
+            'Output: {"capabilities":["DEBUGGING","CODEBASE_NAVIGATION","CODE_EDITING","TEST_WRITING"],"domains":["CODING_SOFTWARE"],"confidence":0.9,"rationale":"software debugging workflow"}',
             "",
             "Trajectory metadata:",
             json.dumps(
@@ -202,7 +230,7 @@ def label_sample_with_llm_response(
 
     metadata["capability_labeling"] = {
         "taxonomy_version": capability_taxonomy.version,
-        "method": "llm_json_v1",
+        "method": LLM_LABEL_METHOD,
         "model": model_name,
         "confidence": normalized["confidence"],
         "rationale": normalized["rationale"],
@@ -210,7 +238,7 @@ def label_sample_with_llm_response(
     }
     metadata["domain_labeling"] = {
         "taxonomy_version": domain_taxonomy.version,
-        "method": "llm_json_v1",
+        "method": LLM_LABEL_METHOD,
         "model": model_name,
         "confidence": normalized["confidence"],
         "rationale": normalized["rationale"],
@@ -218,7 +246,7 @@ def label_sample_with_llm_response(
     }
     if not parsed_ok:
         metadata["llm_labeling_error"] = {
-            "method": "llm_json_v1",
+            "method": LLM_LABEL_METHOD,
             "model": model_name,
             "parse_error": normalized["parse_error"],
             "raw_response_preview": normalized["raw_response_preview"],
@@ -230,16 +258,21 @@ def label_sample_with_llm_response(
     return sample, parsed_ok
 
 
-def require_causal_lm(
+def require_generation_model(
     model_name: str,
     *,
     device: int | None,
     dtype: str,
     trust_remote_code: bool,
-) -> tuple[Any, Any, Any]:
+) -> tuple[Any, Any, Any, str]:
     try:
         import torch
-        from transformers import AutoModelForCausalLM, AutoTokenizer
+        from transformers import (
+            AutoModelForCausalLM,
+            AutoModelForImageTextToText,
+            AutoProcessor,
+            AutoTokenizer,
+        )
     except ImportError as exc:
         raise OptionalLLMLabelingDependencyError(
             "llm-label requires lightweight labeling dependencies. Install on the GPU machine with:\n"
@@ -265,64 +298,117 @@ def require_causal_lm(
             "float32": torch.float32,
         }[dtype]
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=trust_remote_code)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        torch_dtype=torch_dtype,
-        trust_remote_code=trust_remote_code,
-    )
-    if tokenizer.pad_token_id is None:
-        tokenizer.pad_token = tokenizer.eos_token
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=trust_remote_code)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            torch_dtype=torch_dtype,
+            trust_remote_code=trust_remote_code,
+        )
+        backend = "causal_lm"
+        if tokenizer.pad_token_id is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        processor = tokenizer
+    except (OSError, ValueError):
+        processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=trust_remote_code)
+        model = AutoModelForImageTextToText.from_pretrained(
+            model_name,
+            torch_dtype=torch_dtype,
+            trust_remote_code=trust_remote_code,
+        )
+        backend = "image_text_to_text"
     model.to(resolved_device)
     model.eval()
-    return tokenizer, model, resolved_device
+    return processor, model, resolved_device, backend
+
+
+def _move_inputs_to_device(inputs: Any, device: Any) -> Any:
+    if hasattr(inputs, "to"):
+        return inputs.to(device)
+    return {
+        key: value.to(device) if hasattr(value, "to") else value
+        for key, value in inputs.items()
+    }
+
+
+def _pad_token_id(processor: Any) -> int | None:
+    tokenizers = [processor, getattr(processor, "tokenizer", None)]
+    for tokenizer in tokenizers:
+        if tokenizer is None:
+            continue
+        token_id = getattr(tokenizer, "pad_token_id", None) or getattr(tokenizer, "eos_token_id", None)
+        if token_id is not None:
+            return int(token_id)
+    return None
 
 
 def make_generator(
     *,
-    tokenizer: Any,
+    processor: Any,
     model: Any,
     device: Any,
+    backend: str,
     max_input_tokens: int,
     max_new_tokens: int,
 ) -> Callable[[str], str]:
     def generate(prompt: str) -> str:
-        messages = [{"role": "user", "content": prompt}]
-        try:
-            rendered = tokenizer.apply_chat_template(
+        if backend == "image_text_to_text":
+            messages = [
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": prompt}],
+                }
+            ]
+            inputs = processor.apply_chat_template(
                 messages,
-                tokenize=False,
+                tokenize=True,
                 add_generation_prompt=True,
-                enable_thinking=False,
+                return_dict=True,
+                return_tensors="pt",
             )
-        except TypeError:
-            rendered = tokenizer.apply_chat_template(
-                messages,
-                tokenize=False,
-                add_generation_prompt=True,
-            )
-        except (AttributeError, ValueError):
-            rendered = prompt
+            inputs = _move_inputs_to_device(inputs, device)
+        else:
+            messages = [{"role": "user", "content": prompt}]
+            try:
+                rendered = processor.apply_chat_template(
+                    messages,
+                    tokenize=False,
+                    add_generation_prompt=True,
+                    enable_thinking=False,
+                )
+            except TypeError:
+                rendered = processor.apply_chat_template(
+                    messages,
+                    tokenize=False,
+                    add_generation_prompt=True,
+                )
+            except (AttributeError, ValueError):
+                rendered = prompt
 
-        inputs = tokenizer(
-            rendered,
-            return_tensors="pt",
-            truncation=True,
-            max_length=max_input_tokens,
-        )
-        inputs = {key: value.to(device) for key, value in inputs.items()}
+            inputs = processor(
+                rendered,
+                return_tensors="pt",
+                truncation=True,
+                max_length=max_input_tokens,
+            )
+            inputs = _move_inputs_to_device(inputs, device)
 
         import torch
 
+        generation_kwargs: dict[str, Any] = {
+            "max_new_tokens": max_new_tokens,
+            "do_sample": False,
+        }
+        pad_token_id = _pad_token_id(processor)
+        if pad_token_id is not None:
+            generation_kwargs["pad_token_id"] = pad_token_id
         with torch.inference_mode():
             outputs = model.generate(
                 **inputs,
-                max_new_tokens=max_new_tokens,
-                do_sample=False,
-                pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
+                **generation_kwargs,
             )
         input_length = inputs["input_ids"].shape[-1]
-        return tokenizer.decode(outputs[0][input_length:], skip_special_tokens=True).strip()
+        return processor.decode(outputs[0][input_length:], skip_special_tokens=True).strip()
 
     return generate
 
@@ -348,16 +434,17 @@ def llm_label_jsonl(
     capability_taxonomy = CapabilityTaxonomy.load(taxonomy_path)
     domain_taxonomy = DomainTaxonomy.load(domain_taxonomy_path)
     if generator is None:
-        tokenizer, model, resolved_device = require_causal_lm(
+        processor, model, resolved_device, backend = require_generation_model(
             model_name,
             device=device,
             dtype=dtype,
             trust_remote_code=trust_remote_code,
         )
         generator = make_generator(
-            tokenizer=tokenizer,
+            processor=processor,
             model=model,
             device=resolved_device,
+            backend=backend,
             max_input_tokens=max_input_tokens,
             max_new_tokens=max_new_tokens,
         )
@@ -407,6 +494,7 @@ def llm_label_jsonl(
         "input": str(input_path),
         "output": str(output_path),
         "model": model_name,
+        "method": LLM_LABEL_METHOD,
         "taxonomy_version": capability_taxonomy.version,
         "domain_taxonomy_version": domain_taxonomy.version,
         "written": written,

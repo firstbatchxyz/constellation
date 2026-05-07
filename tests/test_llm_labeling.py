@@ -4,6 +4,8 @@ import unittest
 from pathlib import Path
 
 from constellation.llm_labeling import (
+    DEFAULT_LLM_LABEL_MODEL,
+    LLM_LABEL_METHOD,
     build_llm_label_prompt,
     extract_json_object,
     label_sample_with_llm_response,
@@ -37,6 +39,9 @@ def sample() -> CanonicalSample:
 
 
 class LLMLabelingTests(unittest.TestCase):
+    def test_default_llm_label_model_is_qwen35_small(self):
+        self.assertEqual(DEFAULT_LLM_LABEL_MODEL, "Qwen/Qwen3.5-0.8B")
+
     def test_extract_json_object_from_chatty_response(self):
         parsed = extract_json_object(
             'Sure.\n{"capabilities":["DEBUGGING"],"domains":["SCIENCE"],"confidence":0.8}\nDone.'
@@ -74,6 +79,8 @@ class LLMLabelingTests(unittest.TestCase):
         self.assertIn("STRUCTURED_REASONING", prompt)
         self.assertIn("SCIENCE", prompt)
         self.assertIn("strict JSON object", prompt)
+        self.assertIn("Do not default to CODING_SOFTWARE", prompt)
+        self.assertIn("Domain guardrails", prompt)
         self.assertIn("Debug a physics simulation", prompt)
 
     def test_label_sample_with_llm_response_updates_metadata(self):
@@ -97,7 +104,7 @@ class LLMLabelingTests(unittest.TestCase):
         self.assertTrue(parsed_ok)
         self.assertEqual(labeled.capabilities, ["DEBUGGING", "STRUCTURED_REASONING"])
         self.assertEqual(labeled.domains, ["SCIENCE"])
-        self.assertEqual(labeled.metadata["capability_labeling"]["method"], "llm_json_v1")
+        self.assertEqual(labeled.metadata["capability_labeling"]["method"], LLM_LABEL_METHOD)
         self.assertEqual(labeled.metadata["domain_labeling"]["model"], "fake-qwen")
 
     def test_llm_label_jsonl_accepts_fake_generator(self):

@@ -65,8 +65,9 @@ specialists in [configs/specialist_targets.json](configs/specialist_targets.json
 ModernBERT can still be useful as an encoder scorer, but not as a decoder-style
 prompt model that emits labels.
 
-For the main dataset build, use `llm-label` with a tiny instruction model such
-as `Qwen/Qwen3-0.6B`. It reads the taxonomy and emits strict JSON labels. The
+For the main dataset build, use `llm-label` with a small instruction model. The
+default is `Qwen/Qwen3.5-0.8B` after the Qwen3-0.6B probe showed too much
+coding-domain bias. It reads the taxonomy and emits strict JSON labels. The
 older `model-label` NLI scorer is still useful as a very fast baseline/audit
 path. Weak relabeling is only a fallback/audit path.
 

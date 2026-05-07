@@ -25,10 +25,13 @@ reasoning is not just one flag; it is usually `SCIENCE` plus
 5. Merge reviewed prompt-label outputs back into canonical metadata.
 6. Optionally export encoder/prototype data for ModernBERT-style scoring.
 
-The preferred first pass is a tiny generative labeler, because it can read the
+The preferred first pass is a small generative labeler, because it can read the
 taxonomy, understand the rollout, and emit exact JSON labels without tuning.
-`Qwen/Qwen3-0.6B` is the default because it is small enough to label quickly on
-the H100 and much better suited to structured output than an NLI-only encoder.
+`Qwen/Qwen3.5-0.8B` is the default after the Qwen3-0.6B probe showed too much
+CODING_SOFTWARE bias on non-coding domains. It is exposed by Transformers as an
+image-text-to-text model, but `llm-label` uses it text-only for taxonomy JSON.
+You can pass `--model Qwen/Qwen3-0.6B` when speed is more important than
+cross-domain fidelity.
 
 The deterministic weak pass is not the final classifier. It combines:
 
@@ -63,10 +66,10 @@ uv run python -m constellation.cli sample-jsonl \
 
 uv run python -m constellation.cli llm-label \
   --input '{runs_dir}/merged/rollouts.stratified_smoke.jsonl' \
-  --output '{runs_dir}/merged/rollouts.qwen06_labeled.smoke.jsonl' \
+  --output '{runs_dir}/merged/rollouts.qwen35_08_labeled.smoke.jsonl'
 
 uv run python -m constellation.cli label-report \
-  --input '{runs_dir}/merged/rollouts.qwen06_labeled.smoke.jsonl' \
+  --input '{runs_dir}/merged/rollouts.qwen35_08_labeled.smoke.jsonl' \
   --top-examples 2
 ```
 
@@ -76,8 +79,8 @@ Install GPU labeling dependencies with:
 uv pip install -r requirements/labeling.txt
 ```
 
-The labeling requirements pin `transformers>=4.51.0` because Qwen3 tokenizers
-need current Transformers support.
+The labeling requirements pin a current Transformers version because Qwen3 and
+Qwen3.5 tokenizers/model classes need recent support.
 
 Use the NLI zero-shot scorer as a faster baseline or distribution sanity check:
 
@@ -97,10 +100,10 @@ uv run python -m constellation.cli write-labeling-probes \
 
 uv run python -m constellation.cli llm-label \
   --input '{runs_dir}/labeling/domain_probes.canonical.jsonl' \
-  --output '{runs_dir}/labeling/domain_probes.qwen06_labeled.jsonl'
+  --output '{runs_dir}/labeling/domain_probes.qwen35_08_labeled.jsonl'
 
 uv run python -m constellation.cli probe-report \
-  --input '{runs_dir}/labeling/domain_probes.qwen06_labeled.jsonl'
+  --input '{runs_dir}/labeling/domain_probes.qwen35_08_labeled.jsonl'
 ```
 
 Use the deterministic weak relabeler only for quick audits, fallback operation,
