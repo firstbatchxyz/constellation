@@ -6,6 +6,7 @@ from constellation.eval import score_generation, valid_tool_call
 from constellation.formatting import IGNORE_INDEX, tokenize_with_loss_mask
 from constellation.io import iter_jsonl, write_jsonl
 from constellation.schema import CanonicalSample, CanonicalTurn
+from constellation.streaming import DatasetSource, stream_convert
 from constellation.subsets import build_debugging_pilot_subsets
 
 
@@ -117,6 +118,47 @@ class PilotPipelineTests(unittest.TestCase):
         self.assertTrue(metrics["valid_tool_call"])
         self.assertTrue(metrics["observation_grounded"])
         self.assertTrue(metrics["patch_intent"])
+
+    def test_stream_convert_does_not_prefetch_past_max_rows(self):
+        import constellation.streaming as streaming
+
+        original_iter_hf_rows = streaming.iter_hf_rows
+
+        def fake_iter_hf_rows(source):
+            del source
+            for index in range(10):
+                yield {
+                    "path": f"task-{index}",
+                    "result": "success",
+                    "conversations": [
+                        {"role": "user", "content": "Debug this failing test."},
+                        {
+                            "role": "assistant",
+                            "content": "I inspected the traceback and found the parser bug.",
+                        },
+                    ],
+                }
+            raise AssertionError("stream_convert prefetched past max_rows")
+
+        try:
+            streaming.iter_hf_rows = fake_iter_hf_rows
+            with tempfile.TemporaryDirectory() as tmp:
+                output = Path(tmp) / "out.jsonl"
+                stats = stream_convert(
+                    source=DatasetSource(dataset_path="fixture", parser="agenttrove"),
+                    output=output,
+                    max_rows=10,
+                    min_tokens=1,
+                    max_tokens=32768,
+                    min_quality=0.0,
+                    require_success=False,
+                    skip_errors=False,
+                )
+                self.assertEqual(stats["seen"], 10)
+                self.assertEqual(stats["errors"], 0)
+                self.assertEqual(sum(1 for _ in iter_jsonl(output)), 10)
+        finally:
+            streaming.iter_hf_rows = original_iter_hf_rows
 
 
 if __name__ == "__main__":

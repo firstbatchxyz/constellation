@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
+from itertools import islice
 from pathlib import Path
 from typing import Any
 
@@ -127,9 +128,7 @@ def stream_convert(
     error_types: Counter[str] = Counter()
 
     def rows() -> Any:
-        for raw_row in iter_hf_rows(source):
-            if stats["seen"] >= max_rows:
-                break
+        for raw_row in islice(iter_hf_rows(source), max_rows):
             stats["seen"] += 1
             try:
                 sample = with_quality_score(parse_streamed_row(raw_row, source))
