@@ -9,9 +9,9 @@ categories at all.
 1. Stream or convert each rollout source into canonical JSONL.
 2. Relabel canonical rows with the shared taxonomy.
 3. Inspect label counts and evidence.
-4. Export reviewed rows into a ModernBERT-style classifier dataset.
-5. Fine-tune a multi-label encoder classifier.
-6. Use the classifier to relabel larger streamed shards.
+4. Export prompt/ICL labeling jobs for uncertain or high-value rows.
+5. Merge reviewed prompt-label outputs back into canonical metadata.
+6. Optionally export encoder/prototype data for ModernBERT-style scoring.
 
 The first pass is weak supervision, not the final classifier. It combines:
 
@@ -30,12 +30,21 @@ uv run python -m constellation.cli relabel-capabilities \
   --output '{runs_dir}/labeled/agenttrove.debugging_probe.labeled.jsonl'
 ```
 
-Export training rows for a ModernBERT-style multi-label classifier:
+Export prompt/ICL labeling jobs:
+
+```bash
+uv run python -m constellation.cli export-labeling-prompts \
+  --input '{runs_dir}/labeled/agenttrove.debugging_probe.labeled.jsonl' \
+  --examples '{runs_dir}/labeled/agenttrove.debugging_probe.labeled.jsonl' \
+  --output '{runs_dir}/labeling/prompts.jsonl'
+```
+
+Export rows for optional encoder/prototype scoring:
 
 ```bash
 uv run python -m constellation.cli export-classifier-data \
   --input '{runs_dir}/labeled/agenttrove.debugging_probe.labeled.jsonl' \
-  --output '{runs_dir}/classifier/modernbert_seed.jsonl'
+  --output '{runs_dir}/classifier/encoder_seed.jsonl'
 ```
 
 Render taxonomy docs for review:
@@ -45,17 +54,18 @@ uv run python -m constellation.cli taxonomy-docs \
   --output '{runs_dir}/taxonomy/capability_taxonomy.md'
 ```
 
-## ModernBERT Role
+## Prompt/ICL vs ModernBERT
 
-ModernBERT is an encoder backbone, not a finished classifier for this taxonomy.
-Use it after we have seed labels:
+Prompt + ICL labeling should use a generative instruction model. It can read
+the taxonomy, see examples, and emit strict JSON labels.
 
-- weak labels from the relabeling step
-- reviewed examples for each capability
-- held-out reviewed eval labels
+ModernBERT is encoder-only. It should not be treated as a decoder-style ICL
+model that emits labels from a prompt. If we use ModernBERT without fine-tuning,
+use it for encoder-style scoring:
 
-Train it as multi-label classification over `configs/capability_taxonomy.json`.
-The exported classifier JSONL contains:
+- embed trajectory text and label descriptions
+- rank labels by similarity to taxonomy descriptions and reviewed examples
+- use nearest reviewed examples as evidence for a generative labeler
 
 - `text`
 - `labels`
@@ -65,12 +75,12 @@ The exported classifier JSONL contains:
 
 ## Review Gate
 
-Before training a classifier, manually inspect at least:
+Before trusting automated labels, manually inspect at least:
 
 - 50 positive examples per high-priority capability
 - 50 uncertain or unlabeled examples
 - cross-source label distribution
 - examples where source aliases and keyword cues disagree
 
-The classifier should not replace review until it beats weak labels on a held-out
-reviewed set.
+Prompt/ICL or encoder scoring should not replace review until it beats weak
+labels on a held-out reviewed set.

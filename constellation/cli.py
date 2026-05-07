@@ -12,6 +12,7 @@ from typing import Any
 
 from constellation.categorization import (
     export_classifier_jsonl,
+    export_labeling_prompts_jsonl,
     relabel_jsonl,
     write_taxonomy_markdown,
 )
@@ -146,6 +147,19 @@ def export_classifier(args: argparse.Namespace) -> int:
     return 0
 
 
+def export_labeling_prompts(args: argparse.Namespace) -> int:
+    summary = export_labeling_prompts_jsonl(
+        input_path=artifact_path(args.input),
+        output_path=artifact_path(args.output),
+        taxonomy_path=args.taxonomy,
+        examples_path=artifact_path(args.examples) if args.examples else None,
+        max_examples_per_label=args.max_examples_per_label,
+        max_chars=args.max_chars,
+    )
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
 def taxonomy_docs(args: argparse.Namespace) -> int:
     summary = write_taxonomy_markdown(args.taxonomy, artifact_path(args.output))
     print(json.dumps(summary, indent=2))
@@ -234,7 +248,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     export_cmd = subcommands.add_parser(
         "export-classifier-data",
-        help="export text/label-vector JSONL for ModernBERT-style multi-label training",
+        help="export text/label-vector JSONL for encoder scoring or optional supervised checks",
     )
     export_cmd.add_argument("--input", type=Path, required=True)
     export_cmd.add_argument("--output", type=Path, required=True)
@@ -243,6 +257,18 @@ def build_parser() -> argparse.ArgumentParser:
     export_cmd.add_argument("--max-chars", type=int, default=24000)
     export_cmd.add_argument("--include-unlabeled", action="store_true")
     export_cmd.set_defaults(func=export_classifier)
+
+    prompt_cmd = subcommands.add_parser(
+        "export-labeling-prompts",
+        help="export prompt/ICL JSONL for generative rollout capability labeling",
+    )
+    prompt_cmd.add_argument("--input", type=Path, required=True)
+    prompt_cmd.add_argument("--output", type=Path, required=True)
+    prompt_cmd.add_argument("--taxonomy", type=Path, default=Path("configs/capability_taxonomy.json"))
+    prompt_cmd.add_argument("--examples", type=Path)
+    prompt_cmd.add_argument("--max-examples-per-label", type=int, default=2)
+    prompt_cmd.add_argument("--max-chars", type=int, default=12000)
+    prompt_cmd.set_defaults(func=export_labeling_prompts)
 
     taxonomy_cmd = subcommands.add_parser(
         "taxonomy-docs",

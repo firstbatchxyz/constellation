@@ -56,7 +56,8 @@ fixtures only.
 All rollout sources should be normalized into the shared capability taxonomy in
 [configs/capability_taxonomy.json](configs/capability_taxonomy.json). Use
 [docs/DATASET.md](docs/DATASET.md) for the dataset-first relabeling and
-ModernBERT classifier export flow.
+prompt/ICL labeling flow. ModernBERT can still be useful as an encoder scorer,
+but not as a decoder-style prompt model that emits labels.
 
 ## Core Training Rule
 

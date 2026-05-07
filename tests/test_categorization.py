@@ -3,7 +3,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from constellation.categorization import export_classifier_jsonl, relabel_jsonl
+from constellation.categorization import (
+    export_classifier_jsonl,
+    export_labeling_prompts_jsonl,
+    relabel_jsonl,
+)
 from constellation.io import iter_jsonl, write_jsonl
 from constellation.schema import CanonicalSample, CanonicalTurn
 from constellation.taxonomy import CapabilityTaxonomy
@@ -94,6 +98,34 @@ class CategorizationTests(unittest.TestCase):
             self.assertEqual(len(exported["label_vector"]), len(summary["labels"]))
             self.assertGreater(sum(exported["label_vector"]), 0)
             json.dumps(exported)
+
+    def test_export_labeling_prompts_includes_taxonomy_and_examples(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            input_path = root / "input.jsonl"
+            examples_path = root / "examples.jsonl"
+            output_path = root / "prompts.jsonl"
+            row = canonical_sample().to_dict()
+            row["capabilities"] = ["DEBUGGING", "TERMINAL_WORKFLOW"]
+            write_jsonl(input_path, [row])
+            write_jsonl(examples_path, [row])
+
+            summary = export_labeling_prompts_jsonl(
+                input_path=input_path,
+                output_path=output_path,
+                taxonomy_path=Path("configs/capability_taxonomy.json"),
+                examples_path=examples_path,
+                max_examples_per_label=1,
+                max_chars=4000,
+            )
+            exported = next(iter_jsonl(output_path))
+
+            self.assertEqual(summary["written"], 1)
+            self.assertEqual(summary["example_count"], 1)
+            self.assertIn("Return strict JSON only", exported["prompt"])
+            self.assertIn("DEBUGGING", exported["prompt"])
+            self.assertIn("Example 1 trajectory", exported["prompt"])
+            self.assertIn("Trajectory to label", exported["prompt"])
 
 
 if __name__ == "__main__":
