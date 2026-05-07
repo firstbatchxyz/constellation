@@ -25,7 +25,7 @@ from constellation.llm_labeling import DEFAULT_LLM_LABEL_MODEL, llm_label_jsonl
 from constellation.model_labeling import DEFAULT_ZERO_SHOT_MODEL, model_label_jsonl
 from constellation.parsers import parse_agenttrove_row, parse_hermes_row
 from constellation.probes import probe_report, write_labeling_probes
-from constellation.reporting import label_report, write_label_report
+from constellation.reporting import label_report, specialist_target_report, write_label_report
 from constellation.sampling import sample_jsonl
 from constellation.schema import CanonicalSample
 from constellation.scoring import with_quality_score
@@ -222,6 +222,20 @@ def report_labels(args: argparse.Namespace) -> int:
         )
     else:
         report = label_report(artifact_path(args.input), top_examples=args.top_examples)
+    print(json.dumps(report, indent=2))
+    return 0
+
+
+def report_targets(args: argparse.Namespace) -> int:
+    report = specialist_target_report(
+        artifact_path(args.input),
+        specialist_targets_path=args.specialist_targets,
+        min_quality=args.min_quality,
+        min_tokens=args.min_tokens,
+        max_tokens=args.max_tokens,
+        min_target_samples=args.min_target_samples,
+        top_examples=args.top_examples,
+    )
     print(json.dumps(report, indent=2))
     return 0
 
@@ -487,6 +501,19 @@ def build_parser() -> argparse.ArgumentParser:
     report_cmd.add_argument("--output", type=Path)
     report_cmd.add_argument("--top-examples", type=int, default=0)
     report_cmd.set_defaults(func=report_labels)
+
+    target_report_cmd = subcommands.add_parser(
+        "target-report",
+        help="report labeled sample coverage for configured specialist targets",
+    )
+    target_report_cmd.add_argument("--input", type=Path, required=True)
+    target_report_cmd.add_argument("--specialist-targets", type=Path, default=DEFAULT_SPECIALIST_TARGETS_PATH)
+    target_report_cmd.add_argument("--min-quality", type=float, default=0.45)
+    target_report_cmd.add_argument("--min-tokens", type=int, default=64)
+    target_report_cmd.add_argument("--max-tokens", type=int, default=32768)
+    target_report_cmd.add_argument("--min-target-samples", type=int, default=25)
+    target_report_cmd.add_argument("--top-examples", type=int, default=0)
+    target_report_cmd.set_defaults(func=report_targets)
 
     inspect_cmd = subcommands.add_parser(
         "inspect-sample",
