@@ -87,7 +87,44 @@ its OpenAI-compatible API. In one GPU terminal:
 
 ```bash
 uv pip install -r requirements/serve.txt
+```
 
+If SGLang fails while importing `deep_gemm`, prefer using DeepGEMM correctly by
+pointing `CUDA_HOME` at the CUDA toolkit root:
+
+```bash
+python - <<'PY'
+import glob
+from torch.utils.cpp_extension import CUDA_HOME
+print("torch CUDA_HOME:", CUDA_HOME)
+print("candidate CUDA roots:", glob.glob("/usr/local/cuda*"))
+PY
+
+export CUDA_HOME=/usr/local/cuda
+export PATH="$CUDA_HOME/bin:$PATH"
+export LD_LIBRARY_PATH="$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}"
+```
+
+If the machine has only a driver/runtime and no CUDA toolkit, `deep_gemm` can be
+removed so SGLang falls back to default kernels:
+
+```bash
+uv pip uninstall -y deep-gemm deep_gemm
+```
+
+Then start SGLang:
+
+```bash
+uv run python -m sglang.launch_server \
+  --model-path Qwen/Qwen3.5-0.8B \
+  --host 127.0.0.1 \
+  --port 30000 \
+  --mem-fraction-static 0.75
+```
+
+For a small labeler-only fallback, disable JIT DeepGEMM as well:
+
+```bash
 SGLANG_ENABLE_JIT_DEEPGEMM=0 \
 SGLANG_JIT_DEEPGEMM_PRECOMPILE=0 \
 uv run python -m sglang.launch_server \
@@ -97,9 +134,10 @@ uv run python -m sglang.launch_server \
   --mem-fraction-static 0.75
 ```
 
-On H100, SGLang may auto-enable DeepGEMM if the package is installed. Disable it
-for labeling unless you have a full CUDA toolkit and `CUDA_HOME` configured; the
-0.8B labeler does not need DeepGEMM to be fast enough.
+On H100, SGLang may auto-enable DeepGEMM if the package is installed. DeepGEMM
+is worth using for hot serving paths, but it requires a visible CUDA toolkit.
+For the 0.8B labeler, default kernels are usually fast enough if CUDA_HOME is
+not available.
 
 Then label from another terminal without reloading weights:
 
