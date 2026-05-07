@@ -17,6 +17,8 @@ Environment overrides:
   LABEL_CONCURRENCY                llm-label HTTP concurrency. Default: 16
   STREAM_SHARD_SIZE                Canonical shard size. Default: 50000
   STREAM_MAX_ROWS                  Max rows per source; 0 means full stream. Default: 0
+  ENSURE_CUDNN_VERSION             Override CuDNN before SGLang. Default: 9.16.0.29
+                                   Set empty to skip.
   UV_BIN                           uv binary. Default: uv
 USAGE
 }
@@ -32,6 +34,7 @@ SGLANG_MEM_FRACTION_STATIC="${SGLANG_MEM_FRACTION_STATIC:-0.75}"
 LABEL_CONCURRENCY="${LABEL_CONCURRENCY:-16}"
 STREAM_SHARD_SIZE="${STREAM_SHARD_SIZE:-50000}"
 STREAM_MAX_ROWS="${STREAM_MAX_ROWS:-0}"
+ENSURE_CUDNN_VERSION="${ENSURE_CUDNN_VERSION:-9.16.0.29}"
 UV_BIN="${UV_BIN:-uv}"
 SERVICE_DIR="$HOME/.config/systemd/user"
 SCRIPT_PATH="$REPO_DIR/scripts/final_dataset_systemd.sh"
@@ -43,6 +46,10 @@ run_sglang() {
   cd "$REPO_DIR"
   export SGLANG_ENABLE_JIT_DEEPGEMM="${SGLANG_ENABLE_JIT_DEEPGEMM:-1}"
   export SGLANG_JIT_DEEPGEMM_PRECOMPILE="${SGLANG_JIT_DEEPGEMM_PRECOMPILE:-1}"
+
+  if [[ -n "$ENSURE_CUDNN_VERSION" ]]; then
+    "$UV_BIN" pip install --upgrade "nvidia-cudnn-cu12==$ENSURE_CUDNN_VERSION"
+  fi
 
   exec "$UV_BIN" run python -m sglang.launch_server \
     --model-path "$SGLANG_MODEL" \
@@ -172,6 +179,7 @@ Environment=CONSTELLATION_RUNS_DIR=$RUNS
 Environment=SGLANG_MODEL=$SGLANG_MODEL
 Environment=SGLANG_PORT=$SGLANG_PORT
 Environment=SGLANG_MEM_FRACTION_STATIC=$SGLANG_MEM_FRACTION_STATIC
+Environment=ENSURE_CUDNN_VERSION=$ENSURE_CUDNN_VERSION
 ExecStart=$SCRIPT_PATH run-sglang
 Restart=on-failure
 RestartSec=10

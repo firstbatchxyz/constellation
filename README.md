@@ -93,6 +93,9 @@ journalctl --user -u constellation-final-dataset -f
 
 The helper writes canonical shards, labels them through the local SGLang server,
 and produces final label/target reports under `CONSTELLATION_RUNS_DIR/final`.
+It also reapplies `nvidia-cudnn-cu12==9.16.0.29` before SGLang starts, because
+some `torch`/`sglang` installs resolve back to CuDNN 9.10 while SGLang rejects
+that PyTorch/CuDNN combination.
 
 ## Core Training Rule
 
