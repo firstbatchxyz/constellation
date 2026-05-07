@@ -93,7 +93,7 @@ If SGLang fails while importing `deep_gemm`, prefer using DeepGEMM correctly by
 pointing `CUDA_HOME` at the CUDA toolkit root:
 
 ```bash
-python - <<'PY'
+uv run python - <<'PY'
 import glob
 from torch.utils.cpp_extension import CUDA_HOME
 print("torch CUDA_HOME:", CUDA_HOME)
