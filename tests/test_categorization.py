@@ -149,6 +149,7 @@ class CategorizationTests(unittest.TestCase):
                 examples_path=examples_path,
                 max_examples_per_label=1,
                 max_chars=4000,
+                allow_weak_examples=True,
             )
             exported = next(iter_jsonl(output_path))
 
@@ -160,6 +161,28 @@ class CategorizationTests(unittest.TestCase):
             self.assertIn("domains", exported["prompt"])
             self.assertIn("Example 1 trajectory", exported["prompt"])
             self.assertIn("Trajectory to label", exported["prompt"])
+
+    def test_export_labeling_prompts_skips_weak_examples_by_default(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            input_path = root / "input.jsonl"
+            examples_path = root / "examples.jsonl"
+            output_path = root / "prompts.jsonl"
+            row = canonical_sample().to_dict()
+            row["capabilities"] = ["DEBUGGING"]
+            row["metadata"]["capability_labeling"] = {"method": "weak_heuristic_v1"}
+            write_jsonl(input_path, [row])
+            write_jsonl(examples_path, [row])
+
+            summary = export_labeling_prompts_jsonl(
+                input_path=input_path,
+                output_path=output_path,
+                taxonomy_path=Path("configs/capability_taxonomy.json"),
+                domain_taxonomy_path=Path("configs/domain_taxonomy.json"),
+                examples_path=examples_path,
+            )
+
+            self.assertEqual(summary["example_count"], 0)
 
     def test_relabel_jsonl_tracks_science_domain_separately(self):
         with tempfile.TemporaryDirectory() as tmp:

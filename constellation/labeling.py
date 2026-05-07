@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -168,6 +169,19 @@ def source_category_values(row: dict[str, Any]) -> list[str]:
     return values
 
 
+def cue_matches(haystack: str, cue: str) -> bool:
+    cue = cue.strip().lower()
+    if not cue:
+        return False
+    escaped = re.escape(cue)
+    escaped = escaped.replace(r"\ ", r"\s+")
+    return re.search(rf"(?<![a-z0-9_]){escaped}(?![a-z0-9_])", haystack) is not None
+
+
+def keyword_score(match_count: int) -> float:
+    return round(min(0.9, 0.35 + 0.10 * match_count), 4)
+
+
 def label_capability_evidence(
     *,
     row: dict[str, Any],
@@ -193,9 +207,9 @@ def label_capability_evidence(
     for label, cues in cues_by_label.items():
         if not cues:
             cues = CAPABILITY_KEYWORDS.get(label, ())
-        matched = [cue for cue in cues if cue.lower() in haystack]
+        matched = [cue for cue in cues if cue_matches(haystack, cue)]
         if matched:
-            add(label, min(0.95, 0.45 + 0.10 * len(matched)), "heuristic_keyword", matched[0])
+            add(label, keyword_score(len(matched)), "heuristic_keyword", matched[0])
 
     for raw_value in source_category_values(row):
         normalized = taxonomy.normalize_label(raw_value)
@@ -229,9 +243,9 @@ def label_domain_evidence(
 
     haystack = "\n".join([text, *source_category_values(row)]).lower()
     for label, cues in taxonomy.cues_by_capability().items():
-        matched = [cue for cue in cues if cue.lower() in haystack]
+        matched = [cue for cue in cues if cue_matches(haystack, cue)]
         if matched:
-            add(label, min(0.95, 0.45 + 0.10 * len(matched)), "heuristic_keyword", matched[0])
+            add(label, keyword_score(len(matched)), "heuristic_keyword", matched[0])
 
     for raw_value in source_category_values(row):
         normalized = taxonomy.normalize_label(raw_value)

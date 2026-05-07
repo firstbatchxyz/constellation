@@ -26,6 +26,45 @@ def classifier_text(sample: CanonicalSample, *, max_chars: int = 24000) -> str:
     return text[:head_chars] + "\n\n[...truncated...]\n\n" + text[-tail_chars:]
 
 
+def task_focused_text(sample: CanonicalSample, *, max_chars: int = 12000) -> str:
+    """Extract text useful for weak labeling without rollout harness boilerplate."""
+    user_texts = [turn.content for turn in sample.messages if turn.role == "user"]
+    text = "\n\n".join(user_texts) if user_texts else sample.joined_text()
+
+    start_markers = (
+        "Task Description:",
+        "## Problem Description",
+        "Problem Description",
+        "Task:",
+    )
+    stop_markers = (
+        "Current terminal state:",
+        "Current Terminal Screen:",
+        "New Terminal Output:",
+        "\nassistant:",
+    )
+    lower_text = text.lower()
+    start = 0
+    for marker in start_markers:
+        index = lower_text.find(marker.lower())
+        if index >= 0:
+            start = index
+            break
+    text = text[start:]
+    lower_text = text.lower()
+    stop_indexes = [
+        lower_text.find(marker.lower())
+        for marker in stop_markers
+        if lower_text.find(marker.lower()) >= 0
+    ]
+    if stop_indexes:
+        text = text[: min(stop_indexes)]
+
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars]
+
+
 def taxonomy_prompt(taxonomy: CapabilityTaxonomy, *, label_axis: str = "Capability") -> str:
     lines = [f"{label_axis} taxonomy. Use only these exact labels:"]
     for capability in taxonomy.capabilities:
@@ -40,6 +79,7 @@ def load_icl_examples(
     domain_taxonomy: DomainTaxonomy,
     max_examples_per_label: int,
     max_chars: int,
+    allow_weak_examples: bool = False,
 ) -> list[dict[str, Any]]:
     if examples_path is None:
         return []
@@ -48,6 +88,14 @@ def load_icl_examples(
     examples: list[dict[str, Any]] = []
     for row in iter_jsonl(examples_path):
         sample = CanonicalSample.from_dict(row)
+        capability_method = (sample.metadata.get("capability_labeling") or {}).get("method")
+        domain_method = (sample.metadata.get("domain_labeling") or {}).get("method")
+        is_reviewed = capability_method in {"manual_review_v1", "prompt_icl_v1"} or domain_method in {
+            "manual_review_v1",
+            "prompt_icl_v1",
+        }
+        if not allow_weak_examples and not is_reviewed:
+            continue
         labels = taxonomy.validate_labels(sample.capabilities)
         domains = domain_taxonomy.validate_labels(sample.domains)
         if not labels and not domains:
@@ -129,7 +177,7 @@ def relabel_sample(
     min_score: float,
     max_chars: int,
 ) -> CanonicalSample:
-    text = classifier_text(sample, max_chars=max_chars)
+    text = task_focused_text(sample, max_chars=max_chars)
     row = sample.to_dict()
     capability_evidence = label_capability_evidence(
         row=row,
@@ -172,7 +220,7 @@ def relabel_jsonl(
     output_path: str | Path,
     taxonomy_path: str | Path,
     domain_taxonomy_path: str | Path,
-    min_score: float = 0.45,
+    min_score: float = 0.65,
     max_chars: int = 24000,
 ) -> dict[str, Any]:
     taxonomy = CapabilityTaxonomy.load(taxonomy_path)
@@ -217,7 +265,7 @@ def export_classifier_jsonl(
     output_path: str | Path,
     taxonomy_path: str | Path,
     domain_taxonomy_path: str | Path,
-    min_score: float = 0.45,
+    min_score: float = 0.65,
     max_chars: int = 24000,
     include_unlabeled: bool = False,
 ) -> dict[str, Any]:
@@ -292,6 +340,7 @@ def export_labeling_prompts_jsonl(
     examples_path: str | Path | None = None,
     max_examples_per_label: int = 2,
     max_chars: int = 12000,
+    allow_weak_examples: bool = False,
 ) -> dict[str, Any]:
     taxonomy = CapabilityTaxonomy.load(taxonomy_path)
     domain_taxonomy = DomainTaxonomy.load(domain_taxonomy_path)
@@ -301,6 +350,7 @@ def export_labeling_prompts_jsonl(
         domain_taxonomy=domain_taxonomy,
         max_examples_per_label=max_examples_per_label,
         max_chars=max_chars,
+        allow_weak_examples=allow_weak_examples,
     )
     written = 0
 
@@ -339,6 +389,7 @@ def export_labeling_prompts_jsonl(
         "written": written,
         "example_count": len(examples),
         "max_examples_per_label": max_examples_per_label,
+        "allow_weak_examples": allow_weak_examples,
     }
 
 

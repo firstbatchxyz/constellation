@@ -181,6 +181,7 @@ def export_labeling_prompts(args: argparse.Namespace) -> int:
         examples_path=artifact_path(args.examples) if args.examples else None,
         max_examples_per_label=args.max_examples_per_label,
         max_chars=args.max_chars,
+        allow_weak_examples=args.allow_weak_examples,
     )
     print(json.dumps(summary, indent=2))
     return 0
@@ -287,7 +288,7 @@ def build_parser() -> argparse.ArgumentParser:
     relabel_cmd.add_argument("--output", type=Path, required=True)
     relabel_cmd.add_argument("--taxonomy", type=Path, default=DEFAULT_CAPABILITY_TAXONOMY)
     relabel_cmd.add_argument("--domain-taxonomy", type=Path, default=DEFAULT_DOMAIN_TAXONOMY)
-    relabel_cmd.add_argument("--min-score", type=float, default=0.45)
+    relabel_cmd.add_argument("--min-score", type=float, default=0.65)
     relabel_cmd.add_argument("--max-chars", type=int, default=24000)
     relabel_cmd.set_defaults(func=relabel_capabilities)
 
@@ -299,7 +300,7 @@ def build_parser() -> argparse.ArgumentParser:
     export_cmd.add_argument("--output", type=Path, required=True)
     export_cmd.add_argument("--taxonomy", type=Path, default=DEFAULT_CAPABILITY_TAXONOMY)
     export_cmd.add_argument("--domain-taxonomy", type=Path, default=DEFAULT_DOMAIN_TAXONOMY)
-    export_cmd.add_argument("--min-score", type=float, default=0.45)
+    export_cmd.add_argument("--min-score", type=float, default=0.65)
     export_cmd.add_argument("--max-chars", type=int, default=24000)
     export_cmd.add_argument("--include-unlabeled", action="store_true")
     export_cmd.set_defaults(func=export_classifier)
@@ -315,6 +316,11 @@ def build_parser() -> argparse.ArgumentParser:
     prompt_cmd.add_argument("--examples", type=Path)
     prompt_cmd.add_argument("--max-examples-per-label", type=int, default=2)
     prompt_cmd.add_argument("--max-chars", type=int, default=12000)
+    prompt_cmd.add_argument(
+        "--allow-weak-examples",
+        action="store_true",
+        help="allow weak heuristic labels to be used as ICL examples",
+    )
     prompt_cmd.set_defaults(func=export_labeling_prompts)
 
     taxonomy_cmd = subcommands.add_parser(

@@ -13,7 +13,7 @@
     },
     "TERMINAL_WORKFLOW": {
       "description": "Using shell commands, command output, scripts, test runners, package managers, or CLIs.",
-      "positive_cues": ["shell", "bash", "terminal", "command", "pytest", "npm", "cargo", "uv"],
+      "positive_cues": ["shell", "bash", "terminal", "command line", "command output", "pytest", "npm", "cargo", "uv run"],
       "source_aliases": ["terminal", "shell", "cli", "command_line", "bash"]
     },
     "TOOL_USE": {
@@ -23,7 +23,7 @@
     },
     "CODEBASE_NAVIGATION": {
       "description": "Searching, reading, locating, and understanding files or symbols in a repository.",
-      "positive_cues": ["repository", "repo", "codebase", "search", "inspect", "read file"],
+      "positive_cues": ["repository", "repo", "codebase", "find file", "read file", "symbol"],
       "source_aliases": ["repo_navigation", "codebase_navigation", "code_search", "repository_navigation"]
     },
     "MULTI_FILE_EDITING": {
@@ -33,17 +33,17 @@
     },
     "TEST_WRITING": {
       "description": "Creating, updating, or reasoning about tests, fixtures, assertions, and coverage.",
-      "positive_cues": ["unit test", "tests", "test case", "coverage", "jest", "vitest"],
+      "positive_cues": ["write tests", "add tests", "unit test", "coverage", "pytest", "jest", "vitest"],
       "source_aliases": ["testing", "test_generation", "test_writing", "unit_tests"]
     },
     "PLANNING": {
       "description": "Decomposing goals, sequencing work, producing implementation plans, or choosing strategy.",
-      "positive_cues": ["plan", "roadmap", "milestone", "decompose", "strategy", "steps"],
+      "positive_cues": ["implementation plan", "roadmap", "milestone", "decompose", "strategy"],
       "source_aliases": ["planning", "project_planning", "decomposition", "strategy"]
     },
     "RETRIEVAL_SEARCH": {
       "description": "Searching or retrieving external/internal information, documentation, references, or facts.",
-      "positive_cues": ["search", "retrieve", "lookup", "documentation", "reference", "query"],
+      "positive_cues": ["web search", "retrieve", "lookup", "documentation", "reference material", "query"],
       "source_aliases": ["retrieval", "search", "web_search", "document_search"]
     },
     "CODE_EDITING": {
@@ -53,7 +53,7 @@
     },
     "COMPOSITION": {
       "description": "Drafting prose, essays, narratives, explanations, dialogue, arguments, or other written artifacts.",
-      "positive_cues": ["write", "compose", "draft", "essay", "story", "paragraph", "argument", "narrative"],
+      "positive_cues": ["compose", "draft", "write an essay", "story", "paragraph", "narrative"],
       "source_aliases": ["composition", "writing", "creative_writing", "essay_writing", "drafting"]
     },
     "REVISION": {
@@ -63,7 +63,7 @@
     },
     "STRUCTURED_REASONING": {
       "description": "Explicit stepwise reasoning, analysis, derivations, rationale, or structured thinking.",
-      "positive_cues": ["think", "thinking", "reasoning", "derive", "analyze"],
+      "positive_cues": ["step-by-step", "structured reasoning", "reason about", "derive", "prove", "analyze why"],
       "source_aliases": ["reasoning", "structured_reasoning", "cot", "chain_of_thought", "analysis"]
     }
   },

@@ -32,6 +32,10 @@ The first pass is weak supervision, not the final classifier. It combines:
 - existing canonical capabilities
 - label evidence stored in metadata
 
+The weak pass is intentionally conservative. It is meant to produce candidate
+labels and evidence, not trusted gold labels. Do not use weak-label outputs as
+ICL examples unless you explicitly pass `--allow-weak-examples` for debugging.
+
 ## Commands
 
 Relabel a canonical shard:
@@ -47,9 +51,11 @@ Export prompt/ICL labeling jobs:
 ```bash
 uv run python -m constellation.cli export-labeling-prompts \
   --input '{runs_dir}/labeled/agenttrove.debugging_probe.labeled.jsonl' \
-  --examples '{runs_dir}/labeled/agenttrove.debugging_probe.labeled.jsonl' \
   --output '{runs_dir}/labeling/prompts.jsonl'
 ```
+
+After you have reviewed or prompt-labeled examples, pass those reviewed labels
+as `--examples`.
 
 Export rows for optional encoder/prototype scoring:
 

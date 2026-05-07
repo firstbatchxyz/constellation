@@ -3,12 +3,12 @@
   "domains": {
     "CODING_SOFTWARE": {
       "description": "Programming, software engineering, repositories, systems, scripts, and developer tooling.",
-      "positive_cues": ["code", "program", "software", "repository", "python", "javascript", "compiler", "api", "pytest"],
+      "positive_cues": ["code", "programming", "software", "repository", "python", "javascript", "compiler", "api", "pytest"],
       "source_aliases": ["coding", "software", "programming", "code", "repo", "swe", "engineering", "command_line"]
     },
     "MATHEMATICS": {
       "description": "Mathematical problem solving, formal proof, symbolic manipulation, geometry, algebra, and quantitative derivation.",
-      "positive_cues": ["theorem", "proof", "equation", "algebra", "geometry", "calculus", "integer", "matrix"],
+      "positive_cues": ["theorem", "equation", "algebra", "geometry", "calculus", "matrix"],
       "source_aliases": ["math", "mathematics", "proof", "olympiad", "geometry", "algebra"]
     },
     "SCIENCE": {
@@ -23,7 +23,7 @@
     },
     "DATA_ANALYSIS": {
       "description": "Statistics, data interpretation, spreadsheets, charts, datasets, metrics, and empirical analysis.",
-      "positive_cues": ["dataset", "statistics", "regression", "chart", "table", "metric", "correlation", "analysis"],
+      "positive_cues": ["dataset", "statistics", "regression", "chart", "metric", "correlation", "spreadsheet"],
       "source_aliases": ["data", "data_analysis", "statistics", "analytics", "spreadsheet", "visualization"]
     },
     "HUMANITIES": {
@@ -33,7 +33,7 @@
     },
     "WRITING": {
       "description": "Composition, prose quality, rhetoric, narrative, essays, editing, tone, style, and communication craft.",
-      "positive_cues": ["essay", "draft", "revise", "rewrite", "tone", "style", "prose", "argument"],
+      "positive_cues": ["essay", "draft", "revise", "rewrite", "prose", "rhetoric"],
       "source_aliases": ["writing", "creative_writing", "editing", "copywriting", "rhetoric", "essay"]
     },
     "SOCIAL_SCIENCE": {
@@ -48,7 +48,7 @@
     },
     "GENERAL_KNOWLEDGE": {
       "description": "Broad non-specialized factual, instructional, conversational, or mixed-domain tasks.",
-      "positive_cues": ["explain", "summarize", "answer", "question", "general", "overview"],
+      "positive_cues": ["general knowledge", "overview"],
       "source_aliases": ["general", "knowledge", "qa", "open_ended", "instruction"]
     }
   },
