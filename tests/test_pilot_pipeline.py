@@ -264,6 +264,57 @@ class PilotPipelineTests(unittest.TestCase):
         finally:
             streaming.iter_hf_rows = original_iter_hf_rows
 
+    def test_stream_convert_can_write_shards(self):
+        import constellation.streaming as streaming
+
+        original_iter_hf_rows = streaming.iter_hf_rows
+
+        def fake_iter_hf_rows(source):
+            del source
+            for index in range(5):
+                yield {
+                    "path": f"task-{index}",
+                    "result": "success",
+                    "conversations": [
+                        {"role": "user", "content": f"Debug this failing test {index}."},
+                        {
+                            "role": "assistant",
+                            "content": "I inspected the traceback and found the parser bug.",
+                        },
+                    ],
+                }
+
+        try:
+            streaming.iter_hf_rows = fake_iter_hf_rows
+            with tempfile.TemporaryDirectory() as tmp:
+                output_dir = Path(tmp) / "shards"
+                stats = stream_convert(
+                    source=DatasetSource(dataset_path="fixture", parser="agenttrove"),
+                    output_dir=output_dir,
+                    shard_prefix="agenttrove",
+                    shard_size=2,
+                    max_rows=5,
+                    min_tokens=1,
+                    max_tokens=32768,
+                    min_quality=0.0,
+                    require_success=False,
+                    skip_errors=False,
+                )
+
+                self.assertEqual(stats["written"], 5)
+                self.assertEqual(len(stats["output_paths"]), 3)
+                self.assertEqual(
+                    [path.name for path in sorted(output_dir.glob("*.jsonl"))],
+                    [
+                        "agenttrove-00000.jsonl",
+                        "agenttrove-00001.jsonl",
+                        "agenttrove-00002.jsonl",
+                    ],
+                )
+                self.assertEqual(sum(1 for _ in iter_jsonl(output_dir / "agenttrove-00000.jsonl")), 2)
+        finally:
+            streaming.iter_hf_rows = original_iter_hf_rows
+
 
 if __name__ == "__main__":
     unittest.main()

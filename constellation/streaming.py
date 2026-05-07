@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections import Counter
 from dataclasses import dataclass
 from itertools import islice
@@ -104,10 +105,57 @@ def parse_streamed_row(row: dict[str, Any], source: DatasetSource) -> CanonicalS
     raise ValueError(f"unknown parser {source.parser!r}")
 
 
+def iter_limited_hf_rows(source: DatasetSource, max_rows: int | None) -> Any:
+    rows = iter_hf_rows(source)
+    if max_rows is None or max_rows <= 0:
+        return rows
+    return islice(rows, max_rows)
+
+
+def write_sharded_jsonl(
+    output_dir: str | Path,
+    rows: Any,
+    *,
+    shard_prefix: str,
+    shard_size: int,
+) -> tuple[int, list[str]]:
+    if shard_size <= 0:
+        raise ValueError("shard_size must be positive")
+
+    output_root = Path(output_dir)
+    output_root.mkdir(parents=True, exist_ok=True)
+    count = 0
+    shard_count = 0
+    rows_in_shard = 0
+    paths: list[str] = []
+    handle: Any = None
+    try:
+        for row in rows:
+            if handle is None or rows_in_shard >= shard_size:
+                if handle is not None:
+                    handle.close()
+                shard_path = output_root / f"{shard_prefix}-{shard_count:05d}.jsonl"
+                handle = shard_path.open("w", encoding="utf-8")
+                paths.append(str(shard_path))
+                shard_count += 1
+                rows_in_shard = 0
+            handle.write(json.dumps(row, ensure_ascii=False, separators=(",", ":")))
+            handle.write("\n")
+            count += 1
+            rows_in_shard += 1
+    finally:
+        if handle is not None:
+            handle.close()
+    return count, paths
+
+
 def stream_convert(
     *,
     source: DatasetSource,
-    output: str | Path,
+    output: str | Path | None = None,
+    output_dir: str | Path | None = None,
+    shard_prefix: str | None = None,
+    shard_size: int = 50_000,
     max_rows: int,
     min_tokens: int,
     max_tokens: int,
@@ -124,11 +172,12 @@ def stream_convert(
         "errors": 0,
         "error_types": {},
         "error_examples": [],
+        "output_paths": [],
     }
     error_types: Counter[str] = Counter()
 
     def rows() -> Any:
-        for raw_row in islice(iter_hf_rows(source), max_rows):
+        for raw_row in iter_limited_hf_rows(source, max_rows):
             stats["seen"] += 1
             try:
                 sample = with_quality_score(parse_streamed_row(raw_row, source))
@@ -165,6 +214,19 @@ def stream_convert(
             stats["written"] += 1
             yield sample.to_dict()
 
-    Path(output).parent.mkdir(parents=True, exist_ok=True)
-    write_jsonl(output, rows())
+    if (output is None) == (output_dir is None):
+        raise ValueError("provide exactly one of output or output_dir")
+    if output is not None:
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        write_jsonl(output, rows())
+        stats["output_paths"] = [str(output)]
+    else:
+        prefix = shard_prefix or (source.source_dataset or source.dataset_path).replace("/", "_").replace(":", "_")
+        _, paths = write_sharded_jsonl(
+            output_dir or "",
+            rows(),
+            shard_prefix=prefix,
+            shard_size=shard_size,
+        )
+        stats["output_paths"] = paths
     return stats

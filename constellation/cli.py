@@ -89,7 +89,10 @@ def stream_convert_rows(args: argparse.Namespace) -> int:
     )
     stats = stream_convert(
         source=source,
-        output=artifact_path(args.output),
+        output=artifact_path(args.output) if args.output else None,
+        output_dir=artifact_path(args.output_dir) if args.output_dir else None,
+        shard_prefix=args.shard_prefix,
+        shard_size=args.shard_size,
         max_rows=args.max_rows,
         min_tokens=args.min_tokens,
         max_tokens=args.max_tokens,
@@ -362,7 +365,10 @@ def build_parser() -> argparse.ArgumentParser:
     stream_cmd.add_argument("--dataset-config", help="custom Hugging Face dataset config")
     stream_cmd.add_argument("--split", default=None)
     stream_cmd.add_argument("--parser", choices=sorted(PARSERS), default=None)
-    stream_cmd.add_argument("--output", type=Path, required=True)
+    stream_cmd.add_argument("--output", type=Path)
+    stream_cmd.add_argument("--output-dir", type=Path)
+    stream_cmd.add_argument("--shard-prefix")
+    stream_cmd.add_argument("--shard-size", type=int, default=50000)
     stream_cmd.add_argument("--max-rows", type=int, default=10)
     stream_cmd.add_argument("--min-tokens", type=int, default=64)
     stream_cmd.add_argument("--max-tokens", type=int, default=32768)
