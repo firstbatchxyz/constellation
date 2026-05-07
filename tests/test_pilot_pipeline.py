@@ -25,13 +25,19 @@ def sample(
     quality=0.9,
     source="fixture",
     original_id=None,
+    sample_type="agent",
+    user_content=None,
 ):
     return CanonicalSample(
         id=sample_id,
         source_dataset=source,
-        sample_type="agent",
+        sample_type=sample_type,
         messages=[
-            CanonicalTurn(role="user", type="message", content=f"Debug failing test {sample_id}."),
+            CanonicalTurn(
+                role="user",
+                type="message",
+                content=user_content or f"Debug failing test {sample_id}.",
+            ),
             CanonicalTurn(
                 role="assistant",
                 type="reasoning",
@@ -113,6 +119,54 @@ class PilotPipelineTests(unittest.TestCase):
                 [row["id"] for row in first_train],
                 [row["id"] for row in second_train],
             )
+
+    def test_build_subsets_can_filter_eval_pool(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            input_path = root / "canonical.jsonl"
+            rows = [
+                sample(
+                    "strict-debug",
+                    ["DEBUGGING"],
+                    domains=["CODING_SOFTWARE"],
+                    user_content="Set up repo and run failing tests. Fix the root cause.",
+                ).to_dict(),
+                sample(
+                    "workflow-capture",
+                    ["DEBUGGING"],
+                    domains=["CODING_SOFTWARE"],
+                    user_content="Create a skill from the workflow we just used for debugging.",
+                ).to_dict(),
+                sample(
+                    "contest",
+                    ["DEBUGGING"],
+                    domains=["CODING_SOFTWARE"],
+                    sample_type="coding",
+                    user_content="Solve this competitive programming problem.",
+                ).to_dict(),
+                sample("anchor", ["PLANNING"]).to_dict(),
+            ]
+            write_jsonl(input_path, rows)
+
+            manifest = build_debugging_pilot_subsets(
+                inputs=[input_path],
+                output_dir=root / "strict",
+                target_capabilities=["DEBUGGING"],
+                target_domains=["CODING_SOFTWARE"],
+                output_prefix="debugger",
+                max_train_tokens=10000,
+                eval_fraction=0.99,
+                eval_max_samples=10,
+                min_tokens=1,
+                eval_sample_types=["agent"],
+                eval_required_cues=["failing tests", "root cause"],
+                eval_excluded_cues=["workflow we just used"],
+                seed="fixture",
+            )
+            eval_rows = list(iter_jsonl(root / "strict" / "debugger.eval.jsonl"))
+
+            self.assertEqual(manifest["selection"]["eval_candidate_samples"], 1)
+            self.assertEqual([row["id"] for row in eval_rows], ["strict-debug"])
 
     def test_build_domain_capability_target_subsets(self):
         with tempfile.TemporaryDirectory() as tmp:

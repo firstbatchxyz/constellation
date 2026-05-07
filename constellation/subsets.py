@@ -113,6 +113,25 @@ def sample_matches_target(
     return capability_match and domain_match
 
 
+def sample_matches_eval_filters(
+    sample: CanonicalSample,
+    *,
+    eval_sample_types: list[str],
+    eval_required_cues: list[str],
+    eval_excluded_cues: list[str],
+) -> bool:
+    if eval_sample_types and sample.sample_type not in eval_sample_types:
+        return False
+    text = sample.joined_text().lower()
+    required_cues = [cue.lower() for cue in eval_required_cues if cue]
+    excluded_cues = [cue.lower() for cue in eval_excluded_cues if cue]
+    if required_cues and not any(cue in text for cue in required_cues):
+        return False
+    if excluded_cues and any(cue in text for cue in excluded_cues):
+        return False
+    return True
+
+
 def build_debugging_pilot_subsets(
     *,
     inputs: list[Path],
@@ -128,6 +147,9 @@ def build_debugging_pilot_subsets(
     min_quality: float = 0.45,
     min_tokens: int = 64,
     max_tokens: int = 32768,
+    eval_sample_types: list[str] | None = None,
+    eval_required_cues: list[str] | None = None,
+    eval_excluded_cues: list[str] | None = None,
     seed: str = "constellation-v1",
 ) -> dict[str, Any]:
     if not 0.0 < specialist_target_ratio <= 1.0:
@@ -137,6 +159,9 @@ def build_debugging_pilot_subsets(
 
     resolved_capabilities = target_capabilities or ([target_capability] if target_capability else [])
     resolved_domains = target_domains or []
+    resolved_eval_sample_types = eval_sample_types or []
+    resolved_eval_required_cues = eval_required_cues or []
+    resolved_eval_excluded_cues = eval_excluded_cues or []
     prefix = output_prefix or default_output_prefix(resolved_capabilities, resolved_domains)
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -157,20 +182,30 @@ def build_debugging_pilot_subsets(
             target_domains=resolved_domains,
         )
     ]
+    eval_candidate_samples = [
+        sample
+        for sample in target_samples
+        if sample_matches_eval_filters(
+            sample,
+            eval_sample_types=resolved_eval_sample_types,
+            eval_required_cues=resolved_eval_required_cues,
+            eval_excluded_cues=resolved_eval_excluded_cues,
+        )
+    ]
     eval_groups = {
         group_key(sample)
-        for sample in target_samples
+        for sample in eval_candidate_samples
         if stable_score(f"{seed}|eval|{group_key(sample)}") < eval_fraction
     }
     eval_samples = [
-        sample for sample in target_samples if group_key(sample) in eval_groups
+        sample for sample in eval_candidate_samples if group_key(sample) in eval_groups
     ]
     eval_samples = sorted(eval_samples, key=lambda item: deterministic_order(item, f"{seed}|eval"))[
         :eval_max_samples
     ]
-    if not eval_samples and target_samples and eval_max_samples > 0:
+    if not eval_samples and eval_candidate_samples and eval_max_samples > 0:
         eval_samples = sorted(
-            target_samples,
+            eval_candidate_samples,
             key=lambda item: deterministic_order(item, f"{seed}|eval-fallback"),
         )[:1]
 
@@ -260,6 +295,10 @@ def build_debugging_pilot_subsets(
             "min_quality": min_quality,
             "min_tokens": min_tokens,
             "max_tokens": max_tokens,
+            "eval_sample_types": resolved_eval_sample_types,
+            "eval_required_cues": resolved_eval_required_cues,
+            "eval_excluded_cues": resolved_eval_excluded_cues,
+            "eval_candidate_samples": len(eval_candidate_samples),
         },
     }
     paths["manifest"].write_text(json.dumps(manifest, indent=2), encoding="utf-8")

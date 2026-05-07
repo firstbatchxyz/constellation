@@ -133,6 +133,9 @@ def build_subsets(args: argparse.Namespace) -> int:
         min_quality=args.min_quality,
         min_tokens=args.min_tokens,
         max_tokens=args.max_tokens,
+        eval_sample_types=args.eval_sample_type,
+        eval_required_cues=args.eval_require_cue,
+        eval_excluded_cues=args.eval_exclude_cue,
         seed=args.seed,
     )
     print(json.dumps(manifest, indent=2))
@@ -394,6 +397,9 @@ def build_parser() -> argparse.ArgumentParser:
     subsets_cmd.add_argument("--min-quality", type=float, default=0.45)
     subsets_cmd.add_argument("--min-tokens", type=int, default=64)
     subsets_cmd.add_argument("--max-tokens", type=int, default=32768)
+    subsets_cmd.add_argument("--eval-sample-type", action="append", default=[])
+    subsets_cmd.add_argument("--eval-require-cue", action="append", default=[])
+    subsets_cmd.add_argument("--eval-exclude-cue", action="append", default=[])
     subsets_cmd.add_argument("--seed", default="constellation-v1")
     subsets_cmd.set_defaults(func=build_subsets)
 
