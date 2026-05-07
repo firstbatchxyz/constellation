@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -112,8 +113,18 @@ def stream_convert(
     min_quality: float,
     require_success: bool,
     skip_errors: bool,
-) -> dict[str, int]:
-    stats = {"seen": 0, "parsed": 0, "written": 0, "skipped": 0, "errors": 0}
+    max_error_examples: int = 3,
+) -> dict[str, Any]:
+    stats: dict[str, Any] = {
+        "seen": 0,
+        "parsed": 0,
+        "written": 0,
+        "skipped": 0,
+        "errors": 0,
+        "error_types": {},
+        "error_examples": [],
+    }
+    error_types: Counter[str] = Counter()
 
     def rows() -> Any:
         for raw_row in iter_hf_rows(source):
@@ -123,8 +134,20 @@ def stream_convert(
             try:
                 sample = with_quality_score(parse_streamed_row(raw_row, source))
                 stats["parsed"] += 1
-            except Exception:
+            except Exception as exc:
                 stats["errors"] += 1
+                error_name = type(exc).__name__
+                error_types[error_name] += 1
+                stats["error_types"] = dict(error_types)
+                if len(stats["error_examples"]) < max_error_examples:
+                    stats["error_examples"].append(
+                        {
+                            "row_number": stats["seen"],
+                            "error_type": error_name,
+                            "error": str(exc),
+                            "row_keys": sorted(str(key) for key in raw_row.keys()),
+                        }
+                    )
                 if skip_errors:
                     continue
                 raise

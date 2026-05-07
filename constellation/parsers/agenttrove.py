@@ -19,9 +19,9 @@ def parse_agenttrove_row(
     *,
     source_dataset: str = "open-thoughts/AgentTrove",
 ) -> CanonicalSample:
-    raw_messages = row.get("messages")
+    raw_messages = row.get("messages") or row.get("conversations")
     if not isinstance(raw_messages, list):
-        raise ValueError("AgentTrove row is missing messages list")
+        raise ValueError("AgentTrove row is missing messages/conversations list")
 
     turns: list[CanonicalTurn] = []
     for raw_message in raw_messages:
@@ -41,14 +41,22 @@ def parse_agenttrove_row(
         row.get("trajectory_id")
         or row.get("task_id")
         or row.get("id")
+        or row.get("path")
+        or row.get("trial_name")
+        or row.get("episode")
         or stable_id(source_dataset, row.get("original_source"), raw_messages)
     )
 
     metadata = {
-        "original_id": row.get("task_id") or row.get("id"),
+        "original_id": row.get("task_id") or row.get("id") or row.get("path"),
         "original_source": row.get("original_source"),
         "teacher_model": row.get("original_teacher") or row.get("model"),
         "reward": row.get("reward"),
+        "result": row.get("result"),
+        "task": row.get("task"),
+        "episode": row.get("episode"),
+        "run_id": row.get("run_id"),
+        "trial_name": row.get("trial_name"),
     }
     metadata = {key: value for key, value in metadata.items() if value is not None}
 
@@ -61,6 +69,10 @@ def parse_agenttrove_row(
         sample_type=sample_type_for_row(row=row, text=text),
         messages=turns,
         capabilities=capabilities,
-        success=parse_success(row["reward"] if "reward" in row else row.get("success")),
+        success=parse_success(
+            row["reward"]
+            if "reward" in row
+            else row.get("success", row.get("result", row.get("task_binary")))
+        ),
         metadata=metadata,
     )

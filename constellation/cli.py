@@ -74,6 +74,7 @@ def stream_convert_rows(args: argparse.Namespace) -> int:
         min_quality=args.min_quality,
         require_success=args.require_success,
         skip_errors=args.skip_errors,
+        max_error_examples=args.max_error_examples,
     )
     print(json.dumps(stats, indent=2))
     return 0
@@ -143,6 +144,7 @@ def build_parser() -> argparse.ArgumentParser:
     stream_cmd.add_argument("--min-quality", type=float, default=0.0)
     stream_cmd.add_argument("--require-success", action="store_true")
     stream_cmd.add_argument("--skip-errors", action="store_true")
+    stream_cmd.add_argument("--max-error-examples", type=int, default=3)
     stream_cmd.set_defaults(func=stream_convert_rows)
 
     subsets_cmd = subcommands.add_parser(

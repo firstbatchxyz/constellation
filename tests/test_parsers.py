@@ -78,6 +78,28 @@ class ParserTests(unittest.TestCase):
         self.assertIn("DEBUGGING", sample.capabilities)
         self.assertEqual(CanonicalSample.from_dict(sample.to_dict()).id, "task-1")
 
+    def test_agenttrove_parser_accepts_conversations_and_result(self):
+        sample = parse_agenttrove_row(
+            {
+                "path": "code_contests-0000__abc",
+                "task": "solve",
+                "original_source": "code_contests",
+                "model": "gpt-5-nano",
+                "result": "success",
+                "conversations": [
+                    {"role": "user", "content": "Debug this command line task."},
+                    {"role": "assistant", "content": "I will inspect the failure."},
+                    {"role": "tool", "content": "Traceback: bad output"},
+                    {"role": "assistant", "content": "The traceback shows the bad output."},
+                ],
+            }
+        )
+
+        self.assertEqual(sample.id, "code_contests-0000__abc")
+        self.assertIs(sample.success, True)
+        self.assertEqual(sample.metadata["task"], "solve")
+        self.assertIn("DEBUGGING", sample.capabilities)
+
     def test_basic_filters_reject_failed_when_required(self):
         sample = parse_agenttrove_row(
             {
