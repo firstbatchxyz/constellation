@@ -54,10 +54,16 @@ uv run python -m constellation.cli llm-label \
 Run a small smoke first on the merged rollout file:
 
 ```bash
-uv run python -m constellation.cli llm-label \
+uv run python -m constellation.cli sample-jsonl \
   --input '{runs_dir}/merged/rollouts.canonical.jsonl' \
+  --output '{runs_dir}/merged/rollouts.stratified_smoke.jsonl' \
+  --group-by source_dataset \
+  --max-per-group 10 \
+  --limit 100
+
+uv run python -m constellation.cli llm-label \
+  --input '{runs_dir}/merged/rollouts.stratified_smoke.jsonl' \
   --output '{runs_dir}/merged/rollouts.qwen06_labeled.smoke.jsonl' \
-  --limit 25
 
 uv run python -m constellation.cli label-report \
   --input '{runs_dir}/merged/rollouts.qwen06_labeled.smoke.jsonl' \

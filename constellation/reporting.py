@@ -13,6 +13,8 @@ from constellation.io import iter_jsonl
 def label_report(input_path: str | Path, *, top_examples: int = 0) -> dict[str, Any]:
     capability_counts: Counter[str] = Counter()
     domain_counts: Counter[str] = Counter()
+    source_counts: Counter[str] = Counter()
+    sample_type_counts: Counter[str] = Counter()
     capability_examples: dict[str, list[str]] = {}
     domain_examples: dict[str, list[str]] = {}
     empty = 0
@@ -22,6 +24,8 @@ def label_report(input_path: str | Path, *, top_examples: int = 0) -> dict[str, 
         rows += 1
         capabilities = list(row.get("capabilities") or [])
         domains = list(row.get("domains") or [])
+        source_counts.update([str(row.get("source_dataset") or "unknown")])
+        sample_type_counts.update([str(row.get("sample_type") or "unknown")])
         capability_counts.update(capabilities)
         domain_counts.update(domains)
         if not capabilities and not domains:
@@ -43,6 +47,8 @@ def label_report(input_path: str | Path, *, top_examples: int = 0) -> dict[str, 
         "rows": rows,
         "empty": empty,
         "empty_rate": round(empty / rows, 4) if rows else 0.0,
+        "sources": dict(source_counts.most_common()),
+        "sample_types": dict(sample_type_counts.most_common()),
         "capabilities": dict(capability_counts.most_common()),
         "domains": dict(domain_counts.most_common()),
     }

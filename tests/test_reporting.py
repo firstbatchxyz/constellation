@@ -33,6 +33,8 @@ class ReportingTests(unittest.TestCase):
 
             self.assertEqual(report["rows"], 2)
             self.assertEqual(report["empty"], 1)
+            self.assertEqual(report["sources"], {"unknown": 2})
+            self.assertEqual(report["sample_types"], {"unknown": 2})
             self.assertEqual(report["capabilities"]["DEBUGGING"], 1)
             self.assertEqual(report["domains"]["CODING_SOFTWARE"], 1)
             self.assertEqual(report["examples"]["capabilities"]["DEBUGGING"], ["a"])

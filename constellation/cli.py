@@ -24,6 +24,7 @@ from constellation.llm_labeling import DEFAULT_LLM_LABEL_MODEL, llm_label_jsonl
 from constellation.model_labeling import DEFAULT_ZERO_SHOT_MODEL, model_label_jsonl
 from constellation.parsers import parse_agenttrove_row, parse_hermes_row
 from constellation.reporting import label_report, write_label_report
+from constellation.sampling import sample_jsonl
 from constellation.schema import CanonicalSample
 from constellation.scoring import with_quality_score
 from constellation.sft import train_sft_from_config
@@ -215,6 +216,19 @@ def report_labels(args: argparse.Namespace) -> int:
     return 0
 
 
+def sample_rows(args: argparse.Namespace) -> int:
+    summary = sample_jsonl(
+        input_path=artifact_path(args.input),
+        output_path=artifact_path(args.output),
+        group_by=args.group_by,
+        max_per_group=args.max_per_group,
+        limit=args.limit,
+        seed=args.seed,
+    )
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
 def export_classifier(args: argparse.Namespace) -> int:
     summary = export_classifier_jsonl(
         input_path=artifact_path(args.input),
@@ -400,6 +414,22 @@ def build_parser() -> argparse.ArgumentParser:
     report_cmd.add_argument("--output", type=Path)
     report_cmd.add_argument("--top-examples", type=int, default=0)
     report_cmd.set_defaults(func=report_labels)
+
+    sample_cmd = subcommands.add_parser(
+        "sample-jsonl",
+        help="write a deterministic representative sample from a curated JSONL shard",
+    )
+    sample_cmd.add_argument("--input", type=Path, required=True)
+    sample_cmd.add_argument("--output", type=Path, required=True)
+    sample_cmd.add_argument(
+        "--group-by",
+        choices=("source_dataset", "sample_type", "source_dataset+sample_type", "none"),
+        default="source_dataset",
+    )
+    sample_cmd.add_argument("--max-per-group", type=int, default=10)
+    sample_cmd.add_argument("--limit", type=int)
+    sample_cmd.add_argument("--seed", default="constellation-v1")
+    sample_cmd.set_defaults(func=sample_rows)
 
     export_cmd = subcommands.add_parser(
         "export-classifier-data",
