@@ -88,12 +88,18 @@ its OpenAI-compatible API. In one GPU terminal:
 ```bash
 uv pip install -r requirements/serve.txt
 
+SGLANG_ENABLE_JIT_DEEPGEMM=0 \
+SGLANG_JIT_DEEPGEMM_PRECOMPILE=0 \
 uv run python -m sglang.launch_server \
   --model-path Qwen/Qwen3.5-0.8B \
   --host 127.0.0.1 \
   --port 30000 \
   --mem-fraction-static 0.75
 ```
+
+On H100, SGLang may auto-enable DeepGEMM if the package is installed. Disable it
+for labeling unless you have a full CUDA toolkit and `CUDA_HOME` configured; the
+0.8B labeler does not need DeepGEMM to be fast enough.
 
 Then label from another terminal without reloading weights:
 
