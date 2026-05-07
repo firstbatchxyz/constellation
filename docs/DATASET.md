@@ -106,6 +106,12 @@ uv run python -m constellation.cli llm-label \
   --output '{runs_dir}/labeling/domain_probes.qwen35_08_sglang.jsonl'
 ```
 
+`llm-label` applies lightweight post-LLM guardrails by default. These are not a
+replacement for review; they drop clearly incompatible coding-only capabilities
+from non-coding tasks and add obvious broad labels such as `STRUCTURED_REASONING`
+or `PLANNING` when strong task cues are present. Use `--no-label-guardrails` to
+inspect raw model labels.
+
 SGLang exposes OpenAI-compatible `/v1/chat/completions`, so the same
 `--backend openai-compatible` path can point at vLLM or another compatible
 server later.

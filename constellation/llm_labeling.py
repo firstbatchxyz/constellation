@@ -19,6 +19,113 @@ from constellation.taxonomy import CapabilityTaxonomy, DomainTaxonomy
 DEFAULT_LLM_LABEL_MODEL = "Qwen/Qwen3.5-0.8B"
 LLM_LABEL_METHOD = "llm_json_v2"
 
+DOMAIN_GUARDRAIL_CUES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "CODING_SOFTWARE",
+        (
+            "codebase",
+            "repository",
+            "python repository",
+            "unit test",
+            "traceback",
+            "pyproject",
+            "package manager",
+            "shell session",
+            "uv run",
+            "pytest",
+            "module not found",
+            "modulenotfounderror",
+        ),
+    ),
+    (
+        "MATHEMATICS",
+        ("prove", "proof", "induction", "n^2", "theorem", "algebra", "equation", "geometry"),
+    ),
+    (
+        "MEDICINE_HEALTH",
+        ("patient", "clinical", "diagnosis", "differential diagnosis", "symptom", "fever", "cough", "oxygen saturation", "pneumonia"),
+    ),
+    (
+        "DATA_ANALYSIS",
+        ("csv", "dataset", "cohort", "retention", "conversion rate", "chart", "statistics", "metric", "anomalous"),
+    ),
+    (
+        "BUSINESS_OPERATIONS",
+        ("customer", "subscription", "acquisition channel", "support triage", "rollout plan", "owners", "success metrics", "operating cadence", "revenue"),
+    ),
+    (
+        "SOCIAL_SCIENCE",
+        ("survey study", "housing voucher", "policy", "comparison group", "confounder", "causal interpretation", "school attendance", "education"),
+    ),
+    (
+        "HUMANITIES",
+        ("sophocles", "antigone", "divine law", "state authority", "civic duty", "close reading", "poem", "novel", "philosophy", "history"),
+    ),
+    (
+        "WRITING",
+        ("draft", "personal essay", "revise", "rewrite", "improve clarity", "prose", "tone", "style", "paragraph"),
+    ),
+    (
+        "SCIENCE",
+        ("combustion", "physics", "chemistry", "biology", "ocean acidification", "coral", "calcification", "experiment", "hypothesis"),
+    ),
+    (
+        "GENERAL_KNOWLEDGE",
+        ("time zones", "curious reader", "countries", "cities"),
+    ),
+)
+
+REQUIRED_CAPABILITY_CUES: dict[str, tuple[str, ...]] = {
+    "CODEBASE_NAVIGATION": (
+        "codebase",
+        "repository",
+        "repo",
+        "search the code",
+        "renamed function",
+        "symbol",
+        "source code",
+    ),
+    "CODE_EDITING": ("patch", "modify code", "implementation", "refactor", "diff", "fix the implementation"),
+    "MULTI_FILE_EDITING": ("multi-file", "multiple files", "across files", "refactor"),
+    "TEST_WRITING": ("unit test", "pytest", "jest", "vitest", "test runner", "coverage", "failing test", "write tests", "add tests", "fixture", "assertion"),
+    "TERMINAL_WORKFLOW": ("shell", "terminal", "command", "cli", "uv run", "bash", "python3 -m", "npm", "cargo"),
+    "TOOL_USE": ("tool_call", "function call", "tool response", "observation", "browser", "api call"),
+    "RETRIEVAL_SEARCH": ("search", "literature", "sources", "cite", "lookup", "retrieve", "documentation"),
+    "COMPOSITION": ("compose", "draft", "write an essay", "personal essay", "story", "narrative"),
+    "REVISION": ("revise", "rewrite", "improve clarity", "tone", "style", "proofread", "edit the text"),
+}
+
+ADD_CAPABILITY_CUES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "STRUCTURED_REASONING",
+        (
+            "explain why",
+            "prove",
+            "analyze",
+            "compare",
+            "evidence",
+            "hypothesis",
+            "differential diagnosis",
+            "causal",
+            "confounder",
+            "derive",
+            "formal",
+        ),
+    ),
+    (
+        "PLANNING",
+        ("plan", "rollout plan", "phases", "owners", "risks", "cadence", "design a survey", "define treatment", "success metrics"),
+    ),
+    (
+        "DEBUGGING",
+        ("debug", "failing", "fails", "traceback", "diagnose", "broken", "regression", "incorrect output", "modulenotfounderror"),
+    ),
+    (
+        "ERROR_RECOVERY",
+        ("recover", "retry", "failed", "fails", "fallback", "without discarding", "modulenotfounderror"),
+    ),
+)
+
 
 class OptionalLLMLabelingDependencyError(RuntimeError):
     """Raised when llm-label dependencies are not installed."""
@@ -151,6 +258,10 @@ def _as_string_list(value: Any) -> list[str]:
     return [item for item in value if isinstance(item, str)]
 
 
+def contains_any(text: str, cues: tuple[str, ...]) -> bool:
+    return any(cue in text for cue in cues)
+
+
 def normalize_taxonomy_labels(
     labels: list[str],
     taxonomy: CapabilityTaxonomy,
@@ -168,6 +279,60 @@ def normalize_taxonomy_labels(
         if max_labels > 0 and len(normalized) >= max_labels:
             break
     return normalized
+
+
+def apply_label_guardrails(
+    sample: CanonicalSample,
+    *,
+    capabilities: list[str],
+    domains: list[str],
+    max_capabilities: int,
+    max_domains: int,
+) -> dict[str, Any]:
+    text = task_focused_text(sample, max_chars=24000).lower()
+    matched_domains = [
+        domain
+        for domain, cues in DOMAIN_GUARDRAIL_CUES
+        if contains_any(text, cues)
+    ]
+    final_domains = matched_domains[:max_domains] if matched_domains else list(domains)
+
+    final_capabilities: list[str] = []
+    dropped_capabilities: list[str] = []
+    for label in capabilities:
+        required_cues = REQUIRED_CAPABILITY_CUES.get(label)
+        if required_cues and not contains_any(text, required_cues):
+            dropped_capabilities.append(label)
+            continue
+        if label not in final_capabilities:
+            final_capabilities.append(label)
+
+    added_capabilities: list[str] = []
+    for label, cues in ADD_CAPABILITY_CUES:
+        if label not in final_capabilities and contains_any(text, cues):
+            final_capabilities.append(label)
+            added_capabilities.append(label)
+
+    if max_capabilities > 0:
+        overflow = final_capabilities[max_capabilities:]
+        final_capabilities = final_capabilities[:max_capabilities]
+        dropped_capabilities.extend(overflow)
+
+    return {
+        "capabilities": final_capabilities,
+        "domains": final_domains,
+        "metadata": {
+            "applied": bool(
+                dropped_capabilities
+                or added_capabilities
+                or final_domains != domains
+            ),
+            "dropped_capabilities": dropped_capabilities,
+            "added_capabilities": added_capabilities,
+            "model_domains": domains,
+            "guardrail_domains": final_domains,
+        },
+    }
 
 
 def normalize_llm_payload(
@@ -213,6 +378,7 @@ def label_sample_with_llm_response(
     model_name: str,
     max_capabilities: int,
     max_domains: int,
+    label_guardrails: bool = True,
 ) -> tuple[CanonicalSample, bool]:
     metadata = dict(sample.metadata)
     parsed_ok = True
@@ -225,6 +391,17 @@ def label_sample_with_llm_response(
             max_capabilities=max_capabilities,
             max_domains=max_domains,
         )
+        if label_guardrails:
+            guarded = apply_label_guardrails(
+                sample,
+                capabilities=normalized["capabilities"],
+                domains=normalized["domains"],
+                max_capabilities=max_capabilities,
+                max_domains=max_domains,
+            )
+            normalized["capabilities"] = guarded["capabilities"]
+            normalized["domains"] = guarded["domains"]
+            normalized["guardrails"] = guarded["metadata"]
     except ValueError as exc:
         parsed_ok = False
         normalized = {
@@ -258,6 +435,11 @@ def label_sample_with_llm_response(
             "model": model_name,
             "parse_error": normalized["parse_error"],
             "raw_response_preview": normalized["raw_response_preview"],
+        }
+    if "guardrails" in normalized:
+        metadata["label_guardrails"] = {
+            "method": "post_llm_guardrails_v1",
+            **normalized["guardrails"],
         }
 
     sample.capabilities = normalized["capabilities"]
@@ -535,6 +717,7 @@ def llm_label_jsonl(
     request_timeout: float = 120.0,
     api_content_format: str = "auto",
     concurrency: int = 1,
+    label_guardrails: bool = True,
     device: int | None = None,
     dtype: str = "auto",
     trust_remote_code: bool = False,
@@ -603,6 +786,7 @@ def llm_label_jsonl(
             model_name=model_name,
             max_capabilities=max_capabilities,
             max_domains=max_domains,
+            label_guardrails=label_guardrails,
         )
 
     def record(sample: CanonicalSample, parsed_ok: bool) -> None:
@@ -655,6 +839,7 @@ def llm_label_jsonl(
         "backend": generator_backend,
         "api_base": normalize_openai_base_url(resolved_api_base) if resolved_api_base else None,
         "concurrency": effective_concurrency,
+        "label_guardrails": label_guardrails,
         "taxonomy_version": capability_taxonomy.version,
         "domain_taxonomy_version": domain_taxonomy.version,
         "written": written,

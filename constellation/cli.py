@@ -201,6 +201,7 @@ def llm_label(args: argparse.Namespace) -> int:
         request_timeout=args.request_timeout,
         api_content_format=args.api_content_format,
         concurrency=args.concurrency,
+        label_guardrails=args.label_guardrails,
         device=args.device,
         dtype=args.dtype,
         trust_remote_code=args.trust_remote_code,
@@ -437,6 +438,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="send OpenAI user content as a string or text content part array",
     )
     llm_label_cmd.add_argument("--concurrency", type=int, default=1)
+    llm_label_cmd.add_argument(
+        "--no-label-guardrails",
+        action="store_false",
+        dest="label_guardrails",
+        help="disable post-LLM taxonomy cleanup guardrails",
+    )
+    llm_label_cmd.set_defaults(label_guardrails=True)
     llm_label_cmd.add_argument("--device", type=int)
     llm_label_cmd.add_argument(
         "--dtype",

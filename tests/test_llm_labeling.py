@@ -6,6 +6,7 @@ from pathlib import Path
 from constellation.llm_labeling import (
     DEFAULT_LLM_LABEL_MODEL,
     LLM_LABEL_METHOD,
+    apply_label_guardrails,
     build_llm_label_prompt,
     extract_json_object,
     label_sample_with_llm_response,
@@ -136,6 +137,68 @@ class LLMLabelingTests(unittest.TestCase):
         self.assertEqual(labeled.domains, ["SCIENCE"])
         self.assertEqual(labeled.metadata["capability_labeling"]["method"], LLM_LABEL_METHOD)
         self.assertEqual(labeled.metadata["domain_labeling"]["model"], "fake-qwen")
+
+    def test_label_guardrails_remove_coding_false_positives_and_add_reasoning(self):
+        noncoding = CanonicalSample(
+            id="medicine",
+            source_dataset="fixture",
+            sample_type="reasoning",
+            messages=[
+                CanonicalTurn(
+                    role="user",
+                    type="message",
+                    content=(
+                        "Task: Given a patient with fever, productive cough, pleuritic chest pain, "
+                        "and low oxygen saturation, build a differential diagnosis."
+                    ),
+                )
+            ],
+            quality_score=1.0,
+        )
+
+        guarded = apply_label_guardrails(
+            noncoding,
+            capabilities=["CODEBASE_NAVIGATION"],
+            domains=["CODING_SOFTWARE"],
+            max_capabilities=4,
+            max_domains=2,
+        )
+
+        self.assertEqual(guarded["capabilities"], ["STRUCTURED_REASONING"])
+        self.assertEqual(guarded["domains"], ["MEDICINE_HEALTH"])
+        self.assertEqual(guarded["metadata"]["dropped_capabilities"], ["CODEBASE_NAVIGATION"])
+        self.assertEqual(guarded["metadata"]["added_capabilities"], ["STRUCTURED_REASONING"])
+
+    def test_label_guardrails_keep_real_coding_capabilities(self):
+        coding = CanonicalSample(
+            id="coding",
+            source_dataset="fixture",
+            sample_type="coding",
+            messages=[
+                CanonicalTurn(
+                    role="user",
+                    type="message",
+                    content=(
+                        "Task: A Python repository has a failing unit test. Search the codebase "
+                        "for the renamed function, patch the implementation, and rerun tests."
+                    ),
+                )
+            ],
+            quality_score=1.0,
+        )
+        guarded = apply_label_guardrails(
+            coding,
+            capabilities=["DEBUGGING", "CODEBASE_NAVIGATION", "CODE_EDITING", "TEST_WRITING"],
+            domains=["CODING_SOFTWARE"],
+            max_capabilities=4,
+            max_domains=2,
+        )
+
+        self.assertEqual(
+            guarded["capabilities"],
+            ["DEBUGGING", "CODEBASE_NAVIGATION", "CODE_EDITING", "TEST_WRITING"],
+        )
+        self.assertEqual(guarded["domains"], ["CODING_SOFTWARE"])
 
     def test_llm_label_jsonl_accepts_fake_generator(self):
         with tempfile.TemporaryDirectory() as tmpdir:

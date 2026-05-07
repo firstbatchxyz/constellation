@@ -75,6 +75,9 @@ For speed, run the labeler behind SGLang and call `llm-label --backend sglang`
 so model weights stay resident while Constellation streams JSONL rows through
 the OpenAI-compatible API.
 
+`llm-label` also records post-LLM guardrail edits in metadata so calibration
+cleanup is auditable.
+
 ## Core Training Rule
 
 Tool observations are context, not targets.
