@@ -19,13 +19,18 @@ reasoning is not just one flag; it is usually `SCIENCE` plus
 ## Labeling Flow
 
 1. Stream or convert each rollout source into canonical JSONL.
-2. Relabel canonical rows with the shared taxonomy.
+2. Label canonical rows with the shared taxonomy.
 3. Inspect capability and domain label counts/evidence.
 4. Export prompt/ICL labeling jobs for uncertain or high-value rows.
 5. Merge reviewed prompt-label outputs back into canonical metadata.
 6. Optionally export encoder/prototype data for ModernBERT-style scoring.
 
-The first pass is weak supervision, not the final classifier. It combines:
+The preferred first pass is a tiny generative labeler, because it can read the
+taxonomy, understand the rollout, and emit exact JSON labels without tuning.
+`Qwen/Qwen3-0.6B` is the default because it is small enough to label quickly on
+the H100 and much better suited to structured output than an NLI-only encoder.
+
+The deterministic weak pass is not the final classifier. It combines:
 
 - source category aliases
 - taxonomy keyword cues
@@ -34,27 +39,49 @@ The first pass is weak supervision, not the final classifier. It combines:
 
 The weak pass is intentionally conservative. It is meant to produce candidate
 labels and evidence, not trusted gold labels. For the main dataset build, prefer
-the lightweight model labeler below.
+the LLM labeler below.
 
 ## Commands
 
-Relabel a canonical shard:
+Label a canonical shard with the Qwen JSON labeler:
 
 ```bash
-uv run python -m constellation.cli model-label \
+uv run python -m constellation.cli llm-label \
   --input ~/constellation-runs/canonical/agenttrove.debugging_probe.jsonl \
   --output '{runs_dir}/labeled/agenttrove.debugging_probe.labeled.jsonl'
 ```
 
-The default model is `cross-encoder/nli-MiniLM2-L6-H768`, a small Apache-2.0
-zero-shot NLI classifier. It scores capability and domain descriptions directly,
-so no deterministic keyword labels are needed for the main path.
+Run a small smoke first on the merged rollout file:
+
+```bash
+uv run python -m constellation.cli llm-label \
+  --input '{runs_dir}/merged/rollouts.canonical.jsonl' \
+  --output '{runs_dir}/merged/rollouts.qwen06_labeled.smoke.jsonl' \
+  --limit 25
+
+uv run python -m constellation.cli label-report \
+  --input '{runs_dir}/merged/rollouts.qwen06_labeled.smoke.jsonl' \
+  --top-examples 2
+```
 
 Install GPU labeling dependencies with:
 
 ```bash
 uv pip install -r requirements/labeling.txt
 ```
+
+The labeling requirements pin `transformers>=4.51.0` because Qwen3 tokenizers
+need current Transformers support.
+
+Use the NLI zero-shot scorer as a faster baseline or distribution sanity check:
+
+```bash
+uv run python -m constellation.cli model-label \
+  --input '{runs_dir}/merged/rollouts.canonical.jsonl' \
+  --output '{runs_dir}/merged/rollouts.nli_labeled.jsonl'
+```
+
+The default NLI model is `cross-encoder/nli-MiniLM2-L6-H768`.
 
 Use the deterministic weak relabeler only for quick audits, fallback operation,
 or to inspect cue/evidence quality:

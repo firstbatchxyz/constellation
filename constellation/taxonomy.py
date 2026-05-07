@@ -23,6 +23,7 @@ class CapabilityDefinition:
     description: str
     positive_cues: tuple[str, ...]
     source_aliases: tuple[str, ...]
+    classifier_label: str = ""
 
 
 class CapabilityTaxonomy:
@@ -33,6 +34,8 @@ class CapabilityTaxonomy:
         aliases: dict[str, str] = {}
         for capability in capabilities:
             aliases[normalize_label_text(capability.name)] = capability.name
+            if capability.classifier_label:
+                aliases[normalize_label_text(capability.classifier_label)] = capability.name
             for alias in capability.source_aliases:
                 aliases[normalize_label_text(alias)] = capability.name
         self.aliases = aliases
@@ -47,6 +50,7 @@ class CapabilityTaxonomy:
                     description="",
                     positive_cues=(),
                     source_aliases=(),
+                    classifier_label=str(name).replace("_", " ").lower(),
                 )
                 for name in raw_capabilities
             ]
@@ -57,6 +61,10 @@ class CapabilityTaxonomy:
                     description=str(definition.get("description", "")),
                     positive_cues=tuple(definition.get("positive_cues") or ()),
                     source_aliases=tuple(definition.get("source_aliases") or ()),
+                    classifier_label=str(
+                        definition.get("classifier_label")
+                        or str(name).replace("_", " ").lower()
+                    ),
                 )
                 for name, definition in raw_capabilities.items()
             ]
@@ -92,6 +100,10 @@ class DomainTaxonomy(CapabilityTaxonomy):
                 description=str(definition.get("description", "")),
                 positive_cues=tuple(definition.get("positive_cues") or ()),
                 source_aliases=tuple(definition.get("source_aliases") or ()),
+                classifier_label=str(
+                    definition.get("classifier_label")
+                    or str(name).replace("_", " ").lower()
+                ),
             )
             for name, definition in raw_domains.items()
         ]

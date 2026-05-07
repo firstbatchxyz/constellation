@@ -3,51 +3,61 @@
   "domains": {
     "CODING_SOFTWARE": {
       "description": "Programming, software engineering, repositories, systems, scripts, and developer tooling.",
+      "classifier_label": "programming and software engineering",
       "positive_cues": ["code", "programming", "software", "repository", "python", "javascript", "compiler", "api", "pytest"],
       "source_aliases": ["coding", "software", "programming", "code", "repo", "swe", "engineering", "command_line"]
     },
     "MATHEMATICS": {
       "description": "Mathematical problem solving, formal proof, symbolic manipulation, geometry, algebra, and quantitative derivation.",
+      "classifier_label": "mathematics",
       "positive_cues": ["theorem", "equation", "algebra", "geometry", "calculus", "matrix"],
       "source_aliases": ["math", "mathematics", "proof", "olympiad", "geometry", "algebra"]
     },
     "SCIENCE": {
       "description": "Natural and physical sciences, scientific explanations, experiments, mechanisms, and evidence-based reasoning.",
+      "classifier_label": "natural science",
       "positive_cues": ["experiment", "hypothesis", "physics", "chemistry", "biology", "molecule", "climate", "evidence"],
       "source_aliases": ["science", "scientific", "physics", "chemistry", "biology", "astronomy", "earth_science"]
     },
     "MEDICINE_HEALTH": {
       "description": "Medicine, health, clinical reasoning, physiology, diagnosis, treatment, and biomedical content.",
+      "classifier_label": "medicine and health",
       "positive_cues": ["patient", "clinical", "diagnosis", "treatment", "symptom", "disease", "medical", "health"],
       "source_aliases": ["medicine", "medical", "health", "clinical", "biomedical", "biology_medical"]
     },
     "DATA_ANALYSIS": {
       "description": "Statistics, data interpretation, spreadsheets, charts, datasets, metrics, and empirical analysis.",
+      "classifier_label": "data analysis and statistics",
       "positive_cues": ["dataset", "statistics", "regression", "chart", "metric", "correlation", "spreadsheet"],
       "source_aliases": ["data", "data_analysis", "statistics", "analytics", "spreadsheet", "visualization"]
     },
     "HUMANITIES": {
       "description": "History, literature, philosophy, religion, culture, art analysis, and interpretive scholarship.",
+      "classifier_label": "humanities",
       "positive_cues": ["history", "literature", "philosophy", "poem", "novel", "culture", "ethics", "art"],
       "source_aliases": ["humanities", "history", "literature", "philosophy", "arts", "cultural_analysis"]
     },
     "WRITING": {
       "description": "Composition, prose quality, rhetoric, narrative, essays, editing, tone, style, and communication craft.",
+      "classifier_label": "writing and prose",
       "positive_cues": ["essay", "draft", "revise", "rewrite", "prose", "rhetoric"],
       "source_aliases": ["writing", "creative_writing", "editing", "copywriting", "rhetoric", "essay"]
     },
     "SOCIAL_SCIENCE": {
       "description": "Economics, psychology, sociology, politics, education, law-adjacent reasoning, and social systems.",
+      "classifier_label": "social science",
       "positive_cues": ["economics", "psychology", "sociology", "policy", "political", "education", "survey", "behavior"],
       "source_aliases": ["social_science", "economics", "psychology", "sociology", "politics", "policy"]
     },
     "BUSINESS_OPERATIONS": {
       "description": "Business, product, finance-adjacent analysis, operations, marketing, sales, and organizational work.",
+      "classifier_label": "business and operations",
       "positive_cues": ["business", "market", "customer", "product", "operations", "sales", "strategy", "revenue"],
       "source_aliases": ["business", "operations", "marketing", "sales", "product", "management"]
     },
     "GENERAL_KNOWLEDGE": {
       "description": "Broad non-specialized factual, instructional, conversational, or mixed-domain tasks.",
+      "classifier_label": "general knowledge",
       "positive_cues": ["general knowledge", "overview"],
       "source_aliases": ["general", "knowledge", "qa", "open_ended", "instruction"]
     }

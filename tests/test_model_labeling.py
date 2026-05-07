@@ -22,9 +22,10 @@ class FakeZeroShotClassifier:
         labels = list(candidate_labels)
         scores = []
         for label in labels:
-            if label.startswith("STRUCTURED_REASONING") or label.startswith("SCIENCE"):
+            normalized = label.lower()
+            if "structured reasoning" in normalized or "natural science" in normalized:
                 scores.append(0.91)
-            elif label.startswith("DEBUGGING"):
+            elif "debugging" in normalized:
                 scores.append(0.66)
             else:
                 scores.append(0.05)
@@ -57,11 +58,11 @@ class ModelLabelingTests(unittest.TestCase):
 
         self.assertEqual(labels, ["B"])
 
-    def test_taxonomy_candidates_include_descriptions(self):
+    def test_taxonomy_candidates_use_classifier_labels(self):
         candidates = taxonomy_candidates(CapabilityTaxonomy.load())
 
         self.assertIn("STRUCTURED_REASONING", candidates)
-        self.assertIn("Explicit stepwise reasoning", candidates["STRUCTURED_REASONING"])
+        self.assertIn("structured reasoning", candidates["STRUCTURED_REASONING"])
 
     def test_label_sample_with_fake_zero_shot_classifier(self):
         labeled = label_sample_with_model(

@@ -19,7 +19,7 @@ class OptionalLabelingDependencyError(RuntimeError):
 
 def taxonomy_candidates(taxonomy: CapabilityTaxonomy) -> dict[str, str]:
     return {
-        capability.name: f"{capability.name}: {capability.description}"
+        capability.name: capability.classifier_label
         for capability in taxonomy.capabilities
     }
 
@@ -218,4 +218,3 @@ def model_label_jsonl(
         },
         "domain_counts": {key: value for key, value in domain_counts.items() if value},
     }
-

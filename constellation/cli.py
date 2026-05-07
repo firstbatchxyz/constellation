@@ -20,8 +20,10 @@ from constellation.config import artifact_path
 from constellation.eval import run_eval_from_config
 from constellation.filtering import passes_basic_filters
 from constellation.io import iter_jsonl, write_jsonl
+from constellation.llm_labeling import DEFAULT_LLM_LABEL_MODEL, llm_label_jsonl
 from constellation.model_labeling import DEFAULT_ZERO_SHOT_MODEL, model_label_jsonl
 from constellation.parsers import parse_agenttrove_row, parse_hermes_row
+from constellation.reporting import label_report, write_label_report
 from constellation.schema import CanonicalSample
 from constellation.scoring import with_quality_score
 from constellation.sft import train_sft_from_config
@@ -179,6 +181,40 @@ def model_label(args: argparse.Namespace) -> int:
     return 0
 
 
+def llm_label(args: argparse.Namespace) -> int:
+    summary = llm_label_jsonl(
+        input_path=artifact_path(args.input),
+        output_path=artifact_path(args.output),
+        taxonomy_path=args.taxonomy,
+        domain_taxonomy_path=args.domain_taxonomy,
+        model_name=args.model,
+        max_capabilities=args.max_capabilities,
+        max_domains=args.max_domains,
+        max_chars=args.max_chars,
+        max_input_tokens=args.max_input_tokens,
+        max_new_tokens=args.max_new_tokens,
+        device=args.device,
+        dtype=args.dtype,
+        trust_remote_code=args.trust_remote_code,
+        limit=args.limit,
+    )
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
+def report_labels(args: argparse.Namespace) -> int:
+    if args.output:
+        report = write_label_report(
+            artifact_path(args.input),
+            artifact_path(args.output),
+            top_examples=args.top_examples,
+        )
+    else:
+        report = label_report(artifact_path(args.input), top_examples=args.top_examples)
+    print(json.dumps(report, indent=2))
+    return 0
+
+
 def export_classifier(args: argparse.Namespace) -> int:
     summary = export_classifier_jsonl(
         input_path=artifact_path(args.input),
@@ -331,6 +367,39 @@ def build_parser() -> argparse.ArgumentParser:
     model_label_cmd.add_argument("--device", type=int)
     model_label_cmd.add_argument("--limit", type=int)
     model_label_cmd.set_defaults(func=model_label)
+
+    llm_label_cmd = subcommands.add_parser(
+        "llm-label",
+        help="label canonical JSONL with a small generative instruction model",
+    )
+    llm_label_cmd.add_argument("--input", type=Path, required=True)
+    llm_label_cmd.add_argument("--output", type=Path, required=True)
+    llm_label_cmd.add_argument("--taxonomy", type=Path, default=DEFAULT_CAPABILITY_TAXONOMY)
+    llm_label_cmd.add_argument("--domain-taxonomy", type=Path, default=DEFAULT_DOMAIN_TAXONOMY)
+    llm_label_cmd.add_argument("--model", default=DEFAULT_LLM_LABEL_MODEL)
+    llm_label_cmd.add_argument("--max-capabilities", type=int, default=4)
+    llm_label_cmd.add_argument("--max-domains", type=int, default=2)
+    llm_label_cmd.add_argument("--max-chars", type=int, default=12000)
+    llm_label_cmd.add_argument("--max-input-tokens", type=int, default=8192)
+    llm_label_cmd.add_argument("--max-new-tokens", type=int, default=384)
+    llm_label_cmd.add_argument("--device", type=int)
+    llm_label_cmd.add_argument(
+        "--dtype",
+        choices=("auto", "bfloat16", "float16", "float32"),
+        default="auto",
+    )
+    llm_label_cmd.add_argument("--trust-remote-code", action="store_true")
+    llm_label_cmd.add_argument("--limit", type=int)
+    llm_label_cmd.set_defaults(func=llm_label)
+
+    report_cmd = subcommands.add_parser(
+        "label-report",
+        help="summarize capability/domain labels in a canonical JSONL file",
+    )
+    report_cmd.add_argument("--input", type=Path, required=True)
+    report_cmd.add_argument("--output", type=Path)
+    report_cmd.add_argument("--top-examples", type=int, default=0)
+    report_cmd.set_defaults(func=report_labels)
 
     export_cmd = subcommands.add_parser(
         "export-classifier-data",

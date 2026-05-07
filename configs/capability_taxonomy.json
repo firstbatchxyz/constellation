@@ -3,66 +3,79 @@
   "capabilities": {
     "DEBUGGING": {
       "description": "Diagnosing failures, tracebacks, regressions, incorrect outputs, or broken behavior.",
+      "classifier_label": "debugging and failure diagnosis",
       "positive_cues": ["debug", "bug", "traceback", "stack trace", "exception", "failing test", "regression"],
       "source_aliases": ["debug", "debugging", "bugfix", "bug_fix", "repair", "fixing"]
     },
     "ERROR_RECOVERY": {
       "description": "Recovering from failed commands, invalid assumptions, tool errors, retries, or partial progress.",
+      "classifier_label": "error recovery and retrying after failures",
       "positive_cues": ["retry", "recover", "failed command", "fallback", "try again", "diagnose"],
       "source_aliases": ["recovery", "error_recovery", "retry", "self_correction"]
     },
     "TERMINAL_WORKFLOW": {
       "description": "Using shell commands, command output, scripts, test runners, package managers, or CLIs.",
+      "classifier_label": "terminal and shell command workflow",
       "positive_cues": ["shell", "bash", "terminal", "command line", "command output", "pytest", "npm", "cargo", "uv run"],
       "source_aliases": ["terminal", "shell", "cli", "command_line", "bash"]
     },
     "TOOL_USE": {
       "description": "Calling tools/functions and conditioning on observations or tool responses.",
+      "classifier_label": "tool use and function calling",
       "positive_cues": ["tool_call", "function call", "tool_response", "observation"],
       "source_aliases": ["tool", "tool_use", "function_calling", "agentic_tool_use"]
     },
     "CODEBASE_NAVIGATION": {
       "description": "Searching, reading, locating, and understanding files or symbols in a repository.",
+      "classifier_label": "codebase navigation and repository search",
       "positive_cues": ["repository", "repo", "codebase", "find file", "read file", "symbol"],
       "source_aliases": ["repo_navigation", "codebase_navigation", "code_search", "repository_navigation"]
     },
     "MULTI_FILE_EDITING": {
       "description": "Coordinated changes across multiple files, modules, tests, or interfaces.",
+      "classifier_label": "multi-file editing and refactoring",
       "positive_cues": ["multi-file", "multiple files", "refactor", "across files", "unified diff"],
       "source_aliases": ["multi_file", "multi_file_editing", "refactor", "cross_file"]
     },
     "TEST_WRITING": {
       "description": "Creating, updating, or reasoning about tests, fixtures, assertions, and coverage.",
+      "classifier_label": "writing and fixing software tests",
       "positive_cues": ["write tests", "add tests", "unit test", "coverage", "pytest", "jest", "vitest"],
       "source_aliases": ["testing", "test_generation", "test_writing", "unit_tests"]
     },
     "PLANNING": {
       "description": "Decomposing goals, sequencing work, producing implementation plans, or choosing strategy.",
+      "classifier_label": "planning and task decomposition",
       "positive_cues": ["implementation plan", "roadmap", "milestone", "decompose", "strategy"],
       "source_aliases": ["planning", "project_planning", "decomposition", "strategy"]
     },
     "RETRIEVAL_SEARCH": {
       "description": "Searching or retrieving external/internal information, documentation, references, or facts.",
+      "classifier_label": "information retrieval and search",
       "positive_cues": ["web search", "retrieve", "lookup", "documentation", "reference material", "query"],
       "source_aliases": ["retrieval", "search", "web_search", "document_search"]
     },
     "CODE_EDITING": {
       "description": "Producing patches, diffs, implementations, edits, or code modifications.",
+      "classifier_label": "code editing and patch implementation",
       "positive_cues": ["edit", "patch", "diff", "implementation", "modify", "change code"],
       "source_aliases": ["code_edit", "code_editing", "implementation", "patching"]
     },
     "COMPOSITION": {
       "description": "Drafting prose, essays, narratives, explanations, dialogue, arguments, or other written artifacts.",
+      "classifier_label": "prose composition and drafting",
       "positive_cues": ["compose", "draft", "write an essay", "story", "paragraph", "narrative"],
       "source_aliases": ["composition", "writing", "creative_writing", "essay_writing", "drafting"]
     },
     "REVISION": {
       "description": "Revising, editing, improving clarity, tone, structure, style, or rhetoric in prose.",
+      "classifier_label": "prose revision and editing",
       "positive_cues": ["revise", "rewrite", "edit the text", "improve clarity", "tone", "style", "proofread"],
       "source_aliases": ["revision", "rewriting", "editing", "copyediting", "proofreading", "style_editing"]
     },
     "STRUCTURED_REASONING": {
       "description": "Explicit stepwise reasoning, analysis, derivations, rationale, or structured thinking.",
+      "classifier_label": "structured reasoning and analysis",
       "positive_cues": ["step-by-step", "structured reasoning", "reason about", "derive", "prove", "analyze why"],
       "source_aliases": ["reasoning", "structured_reasoning", "cot", "chain_of_thought", "analysis"]
     }
