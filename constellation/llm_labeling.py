@@ -208,6 +208,7 @@ def build_llm_label_prompt(
             "",
             "Rules:",
             "- Multi-label both axes, but prefer a small precise set over broad coverage.",
+            "- Keep rationale under 12 words.",
             "- Capabilities describe behavior being taught; domains describe subject matter.",
             "- Decide domains from the user's task topic, not from the fact this is a dataset or distillation pipeline.",
             "- Use exact labels from the taxonomies only.",
@@ -292,6 +293,39 @@ def extract_json_object(text: str) -> dict[str, Any]:
                 return value
 
     raise ValueError("response JSON object was not closed")
+
+
+def _raw_decode_key(text: str, key: str) -> Any:
+    key_start = text.find(f'"{key}"')
+    if key_start < 0:
+        return None
+    colon = text.find(":", key_start)
+    if colon < 0:
+        return None
+    try:
+        value, _ = json.JSONDecoder().raw_decode(text[colon + 1 :].lstrip())
+    except json.JSONDecodeError:
+        return None
+    return value
+
+
+def extract_label_payload(text: str) -> dict[str, Any]:
+    """Parse a complete label JSON object, with recovery for truncated rationale text."""
+    try:
+        return extract_json_object(text)
+    except ValueError as exc:
+        capabilities = _raw_decode_key(text, "capabilities")
+        domains = _raw_decode_key(text, "domains")
+        confidence = _raw_decode_key(text, "confidence")
+        if isinstance(capabilities, list) and isinstance(domains, list):
+            return {
+                "capabilities": capabilities,
+                "domains": domains,
+                "confidence": confidence if confidence is not None else 0.0,
+                "rationale": "",
+                "_partial_json_recovery": str(exc),
+            }
+        raise
 
 
 def _as_string_list(value: Any) -> list[str]:
@@ -417,6 +451,7 @@ def normalize_llm_payload(
         ),
         "confidence": confidence_value,
         "rationale": rationale[:1000],
+        "partial_json_recovery": payload.get("_partial_json_recovery"),
     }
 
 
@@ -434,7 +469,7 @@ def label_sample_with_llm_response(
     metadata = dict(sample.metadata)
     parsed_ok = True
     try:
-        payload = extract_json_object(response_text)
+        payload = extract_label_payload(response_text)
         normalized = normalize_llm_payload(
             payload,
             capability_taxonomy=capability_taxonomy,
@@ -491,6 +526,13 @@ def label_sample_with_llm_response(
         metadata["label_guardrails"] = {
             "method": "post_llm_guardrails_v1",
             **normalized["guardrails"],
+        }
+    if normalized.get("partial_json_recovery"):
+        metadata["llm_labeling_recovery"] = {
+            "method": LLM_LABEL_METHOD,
+            "model": model_name,
+            "recovery": normalized["partial_json_recovery"],
+            "raw_response_preview": response_text[:500],
         }
 
     sample.capabilities = normalized["capabilities"]
@@ -655,7 +697,7 @@ def label_response_schema(
             },
             "rationale": {
                 "type": "string",
-                "maxLength": 1000,
+                "maxLength": 240,
             },
         },
         "required": ["capabilities", "domains", "confidence", "rationale"],

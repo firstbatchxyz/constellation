@@ -9,6 +9,7 @@ from constellation.llm_labeling import (
     LLM_LABEL_METHOD,
     apply_label_guardrails,
     build_llm_label_prompt,
+    extract_label_payload,
     extract_json_object,
     label_sample_with_llm_response,
     label_response_schema,
@@ -58,6 +59,19 @@ class LLMLabelingTests(unittest.TestCase):
         self.assertEqual(parsed["capabilities"], ["DEBUGGING"])
         self.assertEqual(parsed["domains"], ["SCIENCE"])
 
+    def test_extract_label_payload_recovers_truncated_rationale(self):
+        parsed = extract_label_payload(
+            '{"capabilities":["CODEBASE_NAVIGATION","CODE_EDITING"],'
+            '"domains":["CODING_SOFTWARE"],'
+            '"confidence":0.9,'
+            '"rationale":"long explanation cut off'
+        )
+
+        self.assertEqual(parsed["capabilities"], ["CODEBASE_NAVIGATION", "CODE_EDITING"])
+        self.assertEqual(parsed["domains"], ["CODING_SOFTWARE"])
+        self.assertEqual(parsed["confidence"], 0.9)
+        self.assertIn("not closed", parsed["_partial_json_recovery"])
+
     def test_openai_compatible_helpers(self):
         self.assertEqual(
             normalize_openai_base_url("http://127.0.0.1:30000"),
@@ -100,6 +114,7 @@ class LLMLabelingTests(unittest.TestCase):
         self.assertIn("DEBUGGING", schema["properties"]["capabilities"]["items"]["enum"])
         self.assertEqual(schema["properties"]["domains"]["maxItems"], 2)
         self.assertIn("SCIENCE", schema["properties"]["domains"]["items"]["enum"])
+        self.assertEqual(schema["properties"]["rationale"]["maxLength"], 240)
         self.assertFalse(schema["additionalProperties"])
 
     def test_openai_generator_sends_structured_response_format(self):
@@ -177,6 +192,7 @@ class LLMLabelingTests(unittest.TestCase):
         self.assertIn("STRUCTURED_REASONING", prompt)
         self.assertIn("SCIENCE", prompt)
         self.assertIn("strict JSON object", prompt)
+        self.assertIn("Keep rationale under 12 words", prompt)
         self.assertIn("Do not default to CODING_SOFTWARE", prompt)
         self.assertIn("Domain guardrails", prompt)
         self.assertIn("Debug a physics simulation", prompt)
@@ -204,6 +220,46 @@ class LLMLabelingTests(unittest.TestCase):
         self.assertEqual(labeled.domains, ["SCIENCE"])
         self.assertEqual(labeled.metadata["capability_labeling"]["method"], LLM_LABEL_METHOD)
         self.assertEqual(labeled.metadata["domain_labeling"]["model"], "fake-qwen")
+
+    def test_label_sample_recovers_truncated_rationale_before_guardrails(self):
+        coding = CanonicalSample(
+            id="code_contests-0094__p3ZjhA2",
+            source_dataset="open-thoughts/AgentTrove",
+            sample_type="coding",
+            messages=[
+                CanonicalTurn(
+                    role="user",
+                    type="message",
+                    content=(
+                        "Task Description:\n# p01086 Short Phrase\n"
+                        "Sample Input\n9\ndo\nthe\n\nSample Output\n1\n"
+                        "Solve this competitive programming problem. Provide a complete implementation."
+                    ),
+                )
+            ],
+            quality_score=1.0,
+        )
+
+        labeled, parsed_ok = label_sample_with_llm_response(
+            coding,
+            response_text=(
+                '{"capabilities":["CODEBASE_NAVIGATION","CODE_EDITING","TEST_WRITING"],'
+                '"domains":["CODING_SOFTWARE"],'
+                '"confidence":0.9,'
+                '"rationale":"Identify the first word by analyzing many lengths'
+            ),
+            capability_taxonomy=CapabilityTaxonomy.load(),
+            domain_taxonomy=DomainTaxonomy.load(),
+            model_name="fake-qwen",
+            max_capabilities=4,
+            max_domains=2,
+        )
+
+        self.assertTrue(parsed_ok)
+        self.assertEqual(labeled.domains, ["CODING_SOFTWARE"])
+        self.assertIn("CODE_EDITING", labeled.capabilities)
+        self.assertIn("llm_labeling_recovery", labeled.metadata)
+        self.assertNotIn("llm_labeling_error", labeled.metadata)
 
     def test_label_guardrails_remove_coding_false_positives_and_add_reasoning(self):
         noncoding = CanonicalSample(
