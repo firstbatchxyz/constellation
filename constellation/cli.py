@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -77,6 +79,10 @@ def stream_convert_rows(args: argparse.Namespace) -> int:
         max_error_examples=args.max_error_examples,
     )
     print(json.dumps(stats, indent=2))
+    sys.stdout.flush()
+    sys.stderr.flush()
+    if args.hard_exit:
+        os._exit(0)
     return 0
 
 
@@ -145,6 +151,13 @@ def build_parser() -> argparse.ArgumentParser:
     stream_cmd.add_argument("--require-success", action="store_true")
     stream_cmd.add_argument("--skip-errors", action="store_true")
     stream_cmd.add_argument("--max-error-examples", type=int, default=3)
+    stream_cmd.add_argument(
+        "--no-hard-exit",
+        action="store_false",
+        dest="hard_exit",
+        help="return normally instead of forcing process exit after streaming completes",
+    )
+    stream_cmd.set_defaults(hard_exit=True)
     stream_cmd.set_defaults(func=stream_convert_rows)
 
     subsets_cmd = subcommands.add_parser(
