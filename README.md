@@ -81,6 +81,19 @@ to constrain label arrays to known taxonomy enums.
 `llm-label` also records post-LLM guardrail edits in metadata so calibration
 cleanup is auditable.
 
+For production-sized dataset builds on the GPU node, use the systemd helper so
+SGLang and the sharded canonical/labeling job survive SSH disconnects:
+
+```bash
+git pull
+scripts/final_dataset_systemd.sh setup
+
+journalctl --user -u constellation-final-dataset -f
+```
+
+The helper writes canonical shards, labels them through the local SGLang server,
+and produces final label/target reports under `CONSTELLATION_RUNS_DIR/final`.
+
 ## Core Training Rule
 
 Tool observations are context, not targets.
