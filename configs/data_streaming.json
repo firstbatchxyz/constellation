@@ -1,0 +1,20 @@
+{
+  "artifact_root": "{runs_dir}",
+  "sources": {
+    "agenttrove": {
+      "source": "agenttrove",
+      "output": "{runs_dir}/canonical/agenttrove.debugging_probe.jsonl",
+      "max_rows": 10
+    },
+    "hermes_kimi": {
+      "source": "hermes-kimi",
+      "output": "{runs_dir}/canonical/hermes_kimi.debugging_probe.jsonl",
+      "max_rows": 10
+    },
+    "hermes_glm": {
+      "source": "hermes-glm",
+      "output": "{runs_dir}/canonical/hermes_glm.debugging_probe.jsonl",
+      "max_rows": 10
+    }
+  }
+}

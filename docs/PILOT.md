@@ -18,6 +18,12 @@ Test the core hypothesis with the smallest experiment that can fail clearly:
 Do not download full datasets into the local workspace. Use streaming reads,
 remote object storage, or training-node scratch paths for any larger artifacts.
 
+Default artifact root:
+
+```bash
+export CONSTELLATION_RUNS_DIR=~/constellation-runs
+```
+
 Split by grouped identifiers, not random rows:
 
 - `task_id`
@@ -87,6 +93,9 @@ Use this as a conservative first config, then tune from observed memory:
 - optimizer: AdamW 8-bit or ZeRO/FSDP-backed AdamW if available
 
 The first run should be a data and eval validation run, not a leaderboard run.
+
+For a 1-5 step SFT smoke run, temporarily override `max_steps` in the train
+config or copy the config to GPU scratch with `"max_steps": 5`.
 
 ## Evaluation
 

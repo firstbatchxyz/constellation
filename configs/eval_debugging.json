@@ -1,0 +1,26 @@
+{
+  "eval_file": "{runs_dir}/subsets/debugging.eval.jsonl",
+  "output_dir": "{runs_dir}/eval/debugging",
+  "prompt_mode": "initial",
+  "limit": 50,
+  "max_new_tokens": 512,
+  "temperature": 0.0,
+  "bf16": true,
+  "models": [
+    {
+      "name": "base_qwen3_4b",
+      "model_name_or_path": "Qwen/Qwen3-4B",
+      "trust_remote_code": false
+    },
+    {
+      "name": "general_agent",
+      "model_name_or_path": "{runs_dir}/models/qwen3-4b-general-agent",
+      "trust_remote_code": false
+    },
+    {
+      "name": "debugger",
+      "model_name_or_path": "{runs_dir}/models/qwen3-4b-debugger",
+      "trust_remote_code": false
+    }
+  ]
+}

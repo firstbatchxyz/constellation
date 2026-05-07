@@ -1,0 +1,23 @@
+{
+  "model_name_or_path": "Qwen/Qwen3-4B",
+  "train_file": "{runs_dir}/subsets/general_agentic_mix.train.jsonl",
+  "output_dir": "{runs_dir}/models/qwen3-4b-general-agent",
+  "max_seq_length": 8192,
+  "per_device_train_batch_size": 1,
+  "gradient_accumulation_steps": 32,
+  "learning_rate": 0.00001,
+  "num_train_epochs": 1,
+  "max_steps": -1,
+  "warmup_ratio": 0.03,
+  "bf16": true,
+  "fp16": false,
+  "gradient_checkpointing": true,
+  "attn_implementation": "flash_attention_2",
+  "logging_steps": 10,
+  "save_steps": 200,
+  "save_total_limit": 2,
+  "report_to": "none",
+  "use_trl_sft_trainer": false,
+  "trust_remote_code": false,
+  "use_fast_tokenizer": true
+}

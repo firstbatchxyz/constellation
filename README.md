@@ -22,7 +22,20 @@ Use `uv` for local and GPU-machine commands:
 
 ```bash
 uv run python -m unittest discover -s tests
+uv run python -m constellation.cli --help
 ```
+
+GPU-only training dependencies are intentionally not required for local tests.
+Install them on the GPU machine when you are ready to run streaming/training:
+
+```bash
+uv pip install -r requirements/train.txt
+```
+
+The default SFT backend uses Hugging Face `Trainer` on Accelerate with custom
+labels so the canonical turn mask is exact. `TRL` is included in the GPU
+requirements and can be enabled with `"use_trl_sft_trainer": true` after a smoke
+run confirms the installed TRL version accepts the custom masked dataset.
 
 ## Data Access Policy
 
@@ -71,6 +84,37 @@ Use one H100 for a small matched-control pilot:
    specialist on held-out tasks grouped by task/repo/source to avoid leakage.
 
 See [docs/PILOT.md](docs/PILOT.md) for the concrete pilot shape.
+
+## Pilot Commands
+
+Run these on the GPU machine. They stream only the requested row count and write
+curated artifacts under `CONSTELLATION_RUNS_DIR` or `~/constellation-runs`.
+
+```bash
+export CONSTELLATION_RUNS_DIR=~/constellation-runs
+
+uv run python -m constellation.cli stream-convert \
+  --source agenttrove \
+  --max-rows 10 \
+  --output '{runs_dir}/canonical/agenttrove.debugging_probe.jsonl' \
+  --skip-errors
+
+uv run python -m constellation.cli stream-convert \
+  --source hermes-kimi \
+  --max-rows 10 \
+  --output '{runs_dir}/canonical/hermes_kimi.debugging_probe.jsonl' \
+  --skip-errors
+
+uv run python -m constellation.cli build-subsets \
+  --input ~/constellation-runs/canonical/agenttrove.debugging_probe.jsonl \
+          ~/constellation-runs/canonical/hermes_kimi.debugging_probe.jsonl \
+  --output-dir '{runs_dir}/subsets' \
+  --max-train-tokens 200000
+
+uv run python -m constellation.cli train-sft --config configs/train_debugger_sft.json
+uv run python -m constellation.cli train-sft --config configs/train_general_agent_sft.json
+uv run python -m constellation.cli eval --config configs/eval_debugging.json
+```
 
 ## External Data Notes
 

@@ -61,6 +61,6 @@ def parse_agenttrove_row(
         sample_type=sample_type_for_row(row=row, text=text),
         messages=turns,
         capabilities=capabilities,
-        success=parse_success(row.get("reward") or row.get("success")),
+        success=parse_success(row["reward"] if "reward" in row else row.get("success")),
         metadata=metadata,
     )
