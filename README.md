@@ -1,3 +1,5 @@
+![Constellation](docs/constellation.png)
+
 # Constellation
 
 Capability-distilled specialist network experiments for Qwen3-4B descendants.
