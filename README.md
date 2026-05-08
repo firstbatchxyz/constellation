@@ -96,6 +96,12 @@ and produces final label/target reports under `CONSTELLATION_RUNS_DIR/final`.
 It also reapplies `nvidia-cudnn-cu12==9.16.0.29` before SGLang starts, because
 some `torch`/`sglang` installs resolve back to CuDNN 9.10 while SGLang rejects
 that PyTorch/CuDNN combination.
+If a source stream is still writing a `.tmp` canonical directory, completed
+shards can be labeled in parallel with:
+
+```bash
+scripts/final_dataset_systemd.sh label-available-shards
+```
 
 ## Core Training Rule
 

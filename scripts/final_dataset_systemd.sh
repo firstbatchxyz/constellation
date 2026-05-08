@@ -7,6 +7,7 @@ Usage:
   scripts/final_dataset_systemd.sh setup
   scripts/final_dataset_systemd.sh run-sglang
   scripts/final_dataset_systemd.sh run-final-dataset
+  scripts/final_dataset_systemd.sh label-available-shards
 
 Environment overrides:
   REPO_DIR                         Repo checkout path.
@@ -20,6 +21,7 @@ Environment overrides:
   ENSURE_CUDNN_VERSION             Override CuDNN before SGLang. Default: 9.16.0.29
                                    Set empty to skip.
   UV_BIN                           uv binary. Default: uv
+  FORCE_RESTREAM_SOURCE            Delete existing source .tmp dirs. Default: 0
 USAGE
 }
 
@@ -36,6 +38,7 @@ STREAM_SHARD_SIZE="${STREAM_SHARD_SIZE:-50000}"
 STREAM_MAX_ROWS="${STREAM_MAX_ROWS:-0}"
 ENSURE_CUDNN_VERSION="${ENSURE_CUDNN_VERSION:-9.16.0.29}"
 UV_BIN="${UV_BIN:-uv}"
+FORCE_RESTREAM_SOURCE="${FORCE_RESTREAM_SOURCE:-0}"
 SERVICE_DIR="$HOME/.config/systemd/user"
 SCRIPT_PATH="$REPO_DIR/scripts/final_dataset_systemd.sh"
 
@@ -70,54 +73,118 @@ stream_source() {
   local dir="$2"
   local prefix="$3"
   local done="$RUNS/final/canonical/$dir/.done"
+  local tmp_dir="$RUNS/final/canonical/$dir.tmp"
 
   if [[ -f "$done" ]]; then
     echo "canonical $source already done"
     return
   fi
 
-  rm -rf "$RUNS/final/canonical/$dir.tmp"
-  mkdir -p "$RUNS/final/canonical/$dir.tmp"
+  if [[ -d "$tmp_dir" && "$FORCE_RESTREAM_SOURCE" != "1" ]]; then
+    echo "found existing $tmp_dir; preserving partial stream" >&2
+    echo "set FORCE_RESTREAM_SOURCE=1 to delete it and restart $source" >&2
+    return 1
+  fi
+
+  rm -rf "$tmp_dir"
+  mkdir -p "$tmp_dir"
 
   "$UV_BIN" run python -m constellation.cli stream-convert \
     --source "$source" \
     --max-rows "$STREAM_MAX_ROWS" \
-    --output-dir "$RUNS/final/canonical/$dir.tmp" \
+    --output-dir "$tmp_dir" \
     --shard-prefix "$prefix" \
     --shard-size "$STREAM_SHARD_SIZE" \
     --skip-errors \
     --no-hard-exit
 
+  touch "$tmp_dir/.stream_done"
   rm -rf "$RUNS/final/canonical/$dir"
-  mv "$RUNS/final/canonical/$dir.tmp" "$RUNS/final/canonical/$dir"
+  mv "$tmp_dir" "$RUNS/final/canonical/$dir"
   touch "$done"
 }
 
-label_shards() {
-  find "$RUNS/final/canonical" -name '*.jsonl' | sort | while read -r shard; do
-    local rel="${shard#$RUNS/final/canonical/}"
-    local out="$RUNS/final/labeled/$rel"
-    local done="$out.done"
-    local tmp="$out.tmp"
+label_one_shard() {
+  local shard="$1"
+  local source_dir
+  local out
+  local done
+  local tmp
 
-    if [[ -f "$done" ]]; then
-      echo "labeled $rel already done"
-      continue
+  source_dir="$(basename "$(dirname "$shard")")"
+  source_dir="${source_dir%.tmp}"
+  out="$RUNS/final/labeled/$source_dir/$(basename "$shard")"
+  done="$out.done"
+  tmp="$out.tmp"
+
+  if [[ -f "$done" ]]; then
+    echo "labeled $source_dir/$(basename "$shard") already done"
+    return
+  fi
+
+  mkdir -p "$(dirname "$out")"
+  rm -f "$tmp"
+
+  "$UV_BIN" run python -m constellation.cli llm-label \
+    --backend sglang \
+    --api-base "http://127.0.0.1:$SGLANG_PORT/v1" \
+    --concurrency "$LABEL_CONCURRENCY" \
+    --input "$shard" \
+    --output "$tmp"
+
+  mv "$tmp" "$out"
+  touch "$done"
+}
+
+label_available_shards() {
+  local canonical_dir
+  local source_dir
+  local limit
+  local shards
+
+  shopt -s nullglob
+  for canonical_dir in "$RUNS/final/canonical"/*; do
+    [[ -d "$canonical_dir" ]] || continue
+    source_dir="$(basename "$canonical_dir")"
+    mapfile -t shards < <(find "$canonical_dir" -maxdepth 1 -type f -name '*.jsonl' | sort)
+    (( ${#shards[@]} > 0 )) || continue
+
+    limit="${#shards[@]}"
+    if [[ "$source_dir" == *.tmp && ! -f "$canonical_dir/.stream_done" ]]; then
+      # The newest shard is probably still being written by stream-convert.
+      limit=$((limit - 1))
     fi
 
-    mkdir -p "$(dirname "$out")"
-    rm -f "$tmp"
-
-    "$UV_BIN" run python -m constellation.cli llm-label \
-      --backend sglang \
-      --api-base "http://127.0.0.1:$SGLANG_PORT/v1" \
-      --concurrency "$LABEL_CONCURRENCY" \
-      --input "$shard" \
-      --output "$tmp"
-
-    mv "$tmp" "$out"
-    touch "$done"
+    for ((index = 0; index < limit; index++)); do
+      label_one_shard "${shards[$index]}"
+    done
   done
+}
+
+label_shards() {
+  label_available_shards
+}
+
+run_source_with_labeling() {
+  local source="$1"
+  local dir="$2"
+  local prefix="$3"
+  local stream_pid
+
+  if [[ -f "$RUNS/final/canonical/$dir/.done" ]]; then
+    echo "canonical $source already done"
+    label_available_shards
+    return
+  fi
+
+  stream_source "$source" "$dir" "$prefix" &
+  stream_pid="$!"
+  while kill -0 "$stream_pid" >/dev/null 2>&1; do
+    label_available_shards
+    sleep 120
+  done
+  wait "$stream_pid"
+  label_available_shards
 }
 
 write_reports() {
@@ -154,11 +221,10 @@ run_final_dataset() {
 
   wait_for_sglang
 
-  stream_source agenttrove agenttrove agenttrove
-  stream_source hermes-kimi hermes_kimi hermes_kimi
-  stream_source hermes-glm hermes_glm hermes_glm
+  run_source_with_labeling agenttrove agenttrove agenttrove
+  run_source_with_labeling hermes-kimi hermes_kimi hermes_kimi
+  run_source_with_labeling hermes-glm hermes_glm hermes_glm
 
-  label_shards
   write_reports
 }
 
@@ -246,6 +312,10 @@ case "$command" in
     ;;
   run-final-dataset)
     run_final_dataset
+    ;;
+  label-available-shards)
+    wait_for_sglang
+    label_available_shards
     ;;
   -h|--help|help)
     usage
