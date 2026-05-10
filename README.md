@@ -105,6 +105,34 @@ shards can be labeled in parallel with:
 scripts/final_dataset_systemd.sh label-available-shards
 ```
 
+For a fresh GPU node that should resume from already-uploaded labeled
+AgentTrove shards and continue Hermes formatting/labeling, use the gold-path
+resume helper:
+
+```bash
+git clone https://github.com/firstbatchxyz/constellation.git /home/ubuntu/constellation
+cd /home/ubuntu/constellation
+scripts/resume_labeling_node.sh start
+```
+
+It downloads uploaded AgentTrove labels from Hugging Face, marks them done,
+starts SGLang, streams Hermes Kimi/GLM into canonical shards, and keeps a
+background label loop running over closed shards. Check progress with:
+
+```bash
+scripts/resume_labeling_node.sh status
+```
+
+On RTX 6000 / Blackwell CUDA 13 nodes, prefer the Docker launcher to avoid local
+CUDA toolkit and JIT kernel drift:
+
+```bash
+scripts/run_sglang_rtx6000.sh --detach --pull --stop-existing
+```
+
+`resume_labeling_node.sh` automatically uses this Docker path when it detects an
+RTX 6000/Blackwell GPU and Docker is available.
+
 ## Core Training Rule
 
 Tool observations are context, not targets.
