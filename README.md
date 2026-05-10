@@ -133,6 +133,22 @@ scripts/run_sglang_rtx6000.sh --detach --pull --stop-existing
 `resume_labeling_node.sh` automatically uses this Docker path when it detects an
 RTX 6000/Blackwell GPU and Docker is available.
 
+For CPU-only formatter nodes, install `uv`, stream Hermes into canonical shards,
+and optionally upload complete canonical shards with:
+
+```bash
+git clone https://github.com/firstbatchxyz/constellation.git /home/ubuntu/constellation
+cd /home/ubuntu/constellation
+scripts/format_cpu_node.sh start
+```
+
+The formatter does not use LLMs or GPUs. It only streams, parses, filters, and
+writes canonical JSONL shards. Check progress with:
+
+```bash
+scripts/format_cpu_node.sh status
+```
+
 ## Core Training Rule
 
 Tool observations are context, not targets.
