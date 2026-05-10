@@ -143,7 +143,9 @@ scripts/format_cpu_node.sh start
 ```
 
 The formatter does not use LLMs or GPUs. It only streams, parses, filters, and
-writes canonical JSONL shards. Check progress with:
+writes canonical JSONL shards. On high-core CPU nodes it starts multiple HF
+stream shards per Hermes source; tune with `FORMAT_PARALLELISM_PER_SOURCE`.
+Check progress with:
 
 ```bash
 scripts/format_cpu_node.sh status

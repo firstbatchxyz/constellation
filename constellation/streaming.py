@@ -105,8 +105,29 @@ def parse_streamed_row(row: dict[str, Any], source: DatasetSource) -> CanonicalS
     raise ValueError(f"unknown parser {source.parser!r}")
 
 
-def iter_limited_hf_rows(source: DatasetSource, max_rows: int | None) -> Any:
+def iter_sharded_rows(rows: Any, *, num_shards: int, shard_index: int) -> Any:
+    if num_shards <= 1:
+        return rows
+    if shard_index < 0 or shard_index >= num_shards:
+        raise ValueError("stream shard index must be in [0, stream_num_shards)")
+    if hasattr(rows, "shard"):
+        return rows.shard(num_shards=num_shards, index=shard_index)
+    return (row for index, row in enumerate(rows) if index % num_shards == shard_index)
+
+
+def iter_limited_hf_rows(
+    source: DatasetSource,
+    max_rows: int | None,
+    *,
+    stream_num_shards: int = 1,
+    stream_shard_index: int = 0,
+) -> Any:
     rows = iter_hf_rows(source)
+    rows = iter_sharded_rows(
+        rows,
+        num_shards=stream_num_shards,
+        shard_index=stream_shard_index,
+    )
     if max_rows is None or max_rows <= 0:
         return rows
     return islice(rows, max_rows)
@@ -163,6 +184,8 @@ def stream_convert(
     require_success: bool,
     skip_errors: bool,
     max_error_examples: int = 3,
+    stream_num_shards: int = 1,
+    stream_shard_index: int = 0,
 ) -> dict[str, Any]:
     stats: dict[str, Any] = {
         "seen": 0,
@@ -173,11 +196,18 @@ def stream_convert(
         "error_types": {},
         "error_examples": [],
         "output_paths": [],
+        "stream_num_shards": stream_num_shards,
+        "stream_shard_index": stream_shard_index,
     }
     error_types: Counter[str] = Counter()
 
     def rows() -> Any:
-        for raw_row in iter_limited_hf_rows(source, max_rows):
+        for raw_row in iter_limited_hf_rows(
+            source,
+            max_rows,
+            stream_num_shards=stream_num_shards,
+            stream_shard_index=stream_shard_index,
+        ):
             stats["seen"] += 1
             try:
                 sample = with_quality_score(parse_streamed_row(raw_row, source))

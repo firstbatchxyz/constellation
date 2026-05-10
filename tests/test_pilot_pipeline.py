@@ -315,6 +315,49 @@ class PilotPipelineTests(unittest.TestCase):
         finally:
             streaming.iter_hf_rows = original_iter_hf_rows
 
+    def test_stream_convert_can_consume_one_stream_shard(self):
+        import constellation.streaming as streaming
+
+        original_iter_hf_rows = streaming.iter_hf_rows
+
+        def fake_iter_hf_rows(source):
+            del source
+            for index in range(6):
+                yield {
+                    "path": f"task-{index}",
+                    "result": "success",
+                    "conversations": [
+                        {"role": "user", "content": f"Debug this failing test {index}."},
+                        {
+                            "role": "assistant",
+                            "content": "I inspected the traceback and found the parser bug.",
+                        },
+                    ],
+                }
+
+        try:
+            streaming.iter_hf_rows = fake_iter_hf_rows
+            with tempfile.TemporaryDirectory() as tmp:
+                output = Path(tmp) / "out.jsonl"
+                stats = stream_convert(
+                    source=DatasetSource(dataset_path="fixture", parser="agenttrove"),
+                    output=output,
+                    max_rows=10,
+                    min_tokens=1,
+                    max_tokens=32768,
+                    min_quality=0.0,
+                    require_success=False,
+                    skip_errors=False,
+                    stream_num_shards=3,
+                    stream_shard_index=1,
+                )
+
+                rows = list(iter_jsonl(output))
+                self.assertEqual(stats["seen"], 2)
+                self.assertEqual([row["id"] for row in rows], ["task-1", "task-4"])
+        finally:
+            streaming.iter_hf_rows = original_iter_hf_rows
+
 
 if __name__ == "__main__":
     unittest.main()

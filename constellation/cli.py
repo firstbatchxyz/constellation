@@ -100,6 +100,8 @@ def stream_convert_rows(args: argparse.Namespace) -> int:
         require_success=args.require_success,
         skip_errors=args.skip_errors,
         max_error_examples=args.max_error_examples,
+        stream_num_shards=args.stream_num_shards,
+        stream_shard_index=args.stream_shard_index,
     )
     print(json.dumps(stats, indent=2))
     sys.stdout.flush()
@@ -376,6 +378,18 @@ def build_parser() -> argparse.ArgumentParser:
     stream_cmd.add_argument("--require-success", action="store_true")
     stream_cmd.add_argument("--skip-errors", action="store_true")
     stream_cmd.add_argument("--max-error-examples", type=int, default=3)
+    stream_cmd.add_argument(
+        "--stream-num-shards",
+        type=int,
+        default=1,
+        help="split the HF stream into this many deterministic source shards",
+    )
+    stream_cmd.add_argument(
+        "--stream-shard-index",
+        type=int,
+        default=0,
+        help="index of the deterministic source shard to consume",
+    )
     stream_cmd.add_argument(
         "--no-hard-exit",
         action="store_false",

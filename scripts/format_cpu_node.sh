@@ -22,6 +22,8 @@ Environment overrides:
   UV_BIN                           uv binary. Default: uv
   STREAM_SHARD_SIZE                Canonical shard size. Default: 50000
   STREAM_MAX_ROWS                  Max rows per source; 0 means full stream. Default: 0
+  FORMAT_PARALLELISM_PER_SOURCE    Parallel HF stream shards per source.
+                                   Default: 16 on 64+ cores, 8 on 32+ cores, else 2.
   FORCE_RESTREAM_SOURCE            Delete existing source .tmp dirs. Default: 0
   HF_UPLOAD_REPO                   Optional HF dataset repo for canonical uploads.
                                    Example: driaforall/constellation-agenttrove-labeled
@@ -57,6 +59,7 @@ FORCE_RESTREAM_SOURCE="${FORCE_RESTREAM_SOURCE:-0}"
 HF_UPLOAD_REPO="${HF_UPLOAD_REPO:-}"
 HF_UPLOAD_PREFIX="${HF_UPLOAD_PREFIX:-canonical}"
 CPU_CORES="${CPU_CORES:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 64)}"
+FORMAT_PARALLELISM_PER_SOURCE="${FORMAT_PARALLELISM_PER_SOURCE:-$(( CPU_CORES >= 64 ? 16 : CPU_CORES >= 32 ? 8 : 2 ))}"
 
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 export CONSTELLATION_RUNS_DIR="$RUNS"
@@ -110,6 +113,8 @@ stream_source() {
   local source="$1"
   local dir="$2"
   local prefix="$3"
+  local stream_num_shards="${4:-1}"
+  local stream_shard_index="${5:-0}"
   local tmp_dir="$RUNS/final/canonical/$dir.tmp"
   local final_dir="$RUNS/final/canonical/$dir"
 
@@ -137,6 +142,8 @@ stream_source() {
     --output-dir "$tmp_dir" \
     --shard-prefix "$prefix" \
     --shard-size "$STREAM_SHARD_SIZE" \
+    --stream-num-shards "$stream_num_shards" \
+    --stream-shard-index "$stream_shard_index" \
     --skip-errors \
     --no-hard-exit
 
@@ -147,6 +154,8 @@ start_stream_source() {
   local source="$1"
   local dir="$2"
   local prefix="$3"
+  local stream_num_shards="${4:-1}"
+  local stream_shard_index="${5:-0}"
   local unit="constellation-format-$dir"
 
   enable_linger
@@ -167,12 +176,36 @@ start_stream_source() {
     --setenv=HF_HOME="$HF_HOME" \
     --setenv=HF_DATASETS_CACHE="$HF_DATASETS_CACHE" \
     --setenv=OMP_NUM_THREADS="$OMP_NUM_THREADS" \
-    "$REPO_DIR/scripts/format_cpu_node.sh" stream-source "$source" "$dir" "$prefix"
+    "$REPO_DIR/scripts/format_cpu_node.sh" stream-source "$source" "$dir" "$prefix" \
+      "$stream_num_shards" "$stream_shard_index"
+}
+
+start_parallel_source() {
+  local source="$1"
+  local dir="$2"
+  local prefix="$3"
+  local index
+  local part
+
+  if (( FORMAT_PARALLELISM_PER_SOURCE <= 1 )); then
+    start_stream_source "$source" "$dir" "$prefix"
+    return
+  fi
+
+  for ((index = 0; index < FORMAT_PARALLELISM_PER_SOURCE; index++)); do
+    part="$(printf '%03d' "$index")"
+    start_stream_source \
+      "$source" \
+      "${dir}_p${part}" \
+      "${prefix}_p${part}" \
+      "$FORMAT_PARALLELISM_PER_SOURCE" \
+      "$index"
+  done
 }
 
 start_hermes_streams() {
-  start_stream_source hermes-kimi hermes_kimi hermes_kimi
-  start_stream_source hermes-glm hermes_glm hermes_glm
+  start_parallel_source hermes-kimi hermes_kimi hermes_kimi
+  start_parallel_source hermes-glm hermes_glm hermes_glm
 }
 
 start_all() {
@@ -207,11 +240,12 @@ upload_complete() {
   local source_dir
   local source_name
   local shard
+  local source_dirs=()
   mkdir -p "$upload_root"
 
-  shopt -s nullglob
-  for source_dir in "$RUNS"/final/canonical/*.tmp "$RUNS"/final/canonical/*; do
-    [[ -d "$source_dir" ]] || continue
+  mapfile -t source_dirs < <(find "$RUNS/final/canonical" -maxdepth 1 -type d 2>/dev/null | sort)
+  for source_dir in "${source_dirs[@]}"; do
+    [[ "$source_dir" != "$RUNS/final/canonical" ]] || continue
     source_name="$(basename "$source_dir")"
     source_name="${source_name%.tmp}"
     mkdir -p "$upload_root/$HF_UPLOAD_PREFIX/$source_name"
@@ -234,9 +268,10 @@ upload_complete() {
 }
 
 status() {
+  local canonical_files=()
+
   echo "== services =="
-  systemctl --user --no-pager --plain status constellation-format-hermes_kimi 2>/dev/null || true
-  systemctl --user --no-pager --plain status constellation-format-hermes_glm 2>/dev/null || true
+  systemctl --user --no-pager --plain list-units 'constellation-format-*' 2>/dev/null || true
 
   echo
   echo "== processes =="
@@ -244,7 +279,12 @@ status() {
 
   echo
   echo "== canonical shards =="
-  wc -l "$RUNS"/final/canonical/*.tmp/*.jsonl "$RUNS"/final/canonical/*/*.jsonl 2>/dev/null || true
+  mapfile -t canonical_files < <(find "$RUNS/final/canonical" -maxdepth 2 -type f -name '*.jsonl' 2>/dev/null | sort)
+  if (( ${#canonical_files[@]} > 0 )); then
+    wc -l "${canonical_files[@]}"
+  else
+    echo "no canonical shards yet"
+  fi
 
   echo
   echo "== recent canonical files =="
@@ -275,11 +315,11 @@ case "$command" in
     start_hermes_streams
     ;;
   stream-source)
-    if [[ $# -ne 4 ]]; then
-      echo "usage: $0 stream-source SOURCE DIR PREFIX" >&2
+    if [[ $# -ne 4 && $# -ne 6 ]]; then
+      echo "usage: $0 stream-source SOURCE DIR PREFIX [STREAM_NUM_SHARDS STREAM_SHARD_INDEX]" >&2
       exit 2
     fi
-    stream_source "$2" "$3" "$4"
+    stream_source "$2" "$3" "$4" "${5:-1}" "${6:-0}"
     ;;
   upload-complete)
     upload_complete
